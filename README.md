@@ -53,6 +53,13 @@ If `cf java` is having issues connecting to your app, chances are the problem is
 To verify, run your `cf java` command in "dry-run" mode by adding the `-n` flag and try to execute the command line that `cf java` gives you back.
 If it fails, the issue is not in `cf java`, but in whatever makes `cf ssh` fail.
 
+The capability of creating heap-dumps is also limited by the filesystem available to the container.
+The `cf java heap-dump` command triggers the heap dump to file system, read the content of the file over the SSH connection, and then remove the heap dump file from the container's file system (unless you have the `-k` flag set).
+The amount of filesystem space available to a container is set for the entire Cloud Foundry landscape with a global configuration.
+The size of a heap dump is roughly linear with the allocated memory of the heap.
+So, it could be that, in case of large heaps or the filesystem having too much stuff in it, there is not enough space on the filesystem for creating the heap dump.
+In that case, the command will likely fail in a rather unpredictable fashion.
+
 From the perspective of integration in workflows and overall shell-friendliness, the `cf java` plugin suffers from some shortcomings in the current `cf-cli` plugin framework:
 * There is no distinction between `stdout` and `stderr` output from the underlying `cf ssh` command (see [this issue on the `cf-cli` project](https://github.com/cloudfoundry/cli/issues/1074))
   * The `cf java` will however exit with status code `1` when the underpinning `cf ssh` command fails
@@ -72,12 +79,8 @@ Since Cloud Foundry allows for over-commit in its cells, it is possible that a c
 (To be fair, it could be swapping even *before* the garbage collection begins, but let's not knit-pick here.)
 So, it is theoretically possible that execuing a heap dump on a JVM in poor status of health will make it go even worse.
 
-Secondly, JVMs output heap dumps to the filesystem.
-What the `cf java heap-dump` command does it, quite literally, trigger the heap dump to file system, read the content of the file over the SSH connection, and then remove the heap dump file from the container's file system (unless you have the `-k` flag set).
-The amount of filesystem space available to a container is set for the entire Cloud Foundry landscape with a global configuration.
-The size of a heap dump is linear with the size of the heap.
-So, it could be that, in case of large heaps or the filesystem having too much stuff in it, there is not enough space on the filesystem for creating the heap dump.
-In that case, the command will likely fail in a rather unpredictable fashion.
+Secondly, as the JVMs output heap dumps to the filesystem, creating a heap-dump may lead to to not enough space on the filesystem been available foo other tasks (e.g., temp files).
+In that case, the application in the container may suffer unexpected errors.
 
 ## Tests and Mocking
 
