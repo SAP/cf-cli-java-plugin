@@ -79,7 +79,7 @@ Since Cloud Foundry allows for over-commit in its cells, it is possible that a c
 (To be fair, it could be swapping even *before* the garbage collection begins, but let's not knit-pick here.)
 So, it is theoretically possible that execuing a heap dump on a JVM in poor status of health will make it go even worse.
 
-Secondly, as the JVMs output heap dumps to the filesystem, creating a heap dump may lead to to not enough space on the filesystem been available foo other tasks (e.g., temp files).
+Secondly, as the JVMs output heap dumps to the filesystem, creating a heap dump may lead to to not enough space on the filesystem been available for other tasks (e.g., temp files).
 In that case, the application in the container may suffer unexpected errors.
 
 ## Tests and Mocking
