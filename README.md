@@ -87,4 +87,4 @@ In that case, the application in the container may suffer unexpected errors.
 The tests are written using [Ginkgo](https://onsi.github.io/ginkgo/) with [Gomega](https://onsi.github.io/gomega/) for the BDD structure, and [Counterfeiter](https://github.com/maxbrunsfeld/counterfeiter) for the mocking generation.
 Unless modifications to the helper interfaces `cmd.CommandExecutor` and `uuid.UUIDGenerator` are needed, there should be no need to regenerate the mocks.
 
-To run the tests, go to the root of the repository and simply run `gingko` (you may need to install Ginkgo first, e.g., `go get github.com/onsi/ginkgo/ginkgo` puts the executable under $GOPATH/bin).
+To run the tests, go to the root of the repository and simply run `gingko` (you may need to install Ginkgo first, e.g., `go get github.com/onsi/ginkgo/ginkgo` puts the executable under `$GOPATH/bin`).
