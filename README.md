@@ -58,7 +58,7 @@ The `cf java heap-dump` command triggers the heap dump to file system, read the 
 The amount of filesystem space available to a container is set for the entire Cloud Foundry landscape with a global configuration.
 The size of a heap dump is roughly linear with the allocated memory of the heap.
 So, it could be that, in case of large heaps or the filesystem having too much stuff in it, there is not enough space on the filesystem for creating the heap dump.
-In that case, the command will likely fail in a rather unpredictable fashion.
+In that case, the creation of the heap dump and thus the command will fail.
 
 From the perspective of integration in workflows and overall shell-friendliness, the `cf java` plugin suffers from some shortcomings in the current `cf-cli` plugin framework:
 * There is no distinction between `stdout` and `stderr` output from the underlying `cf ssh` command (see [this issue on the `cf-cli` project](https://github.com/cloudfoundry/cli/issues/1074))
