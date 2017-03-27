@@ -8,15 +8,20 @@ Currently, it allows to:
 
 ## Installation
 
-Download the binary file for your target OS from the [latest release](https://github.com/SAP/cf-cli-java-plugin/releases/latest).
+### Over Plugin Repository
+
+The CF is available in the [public CF plugin repository](https://plugins.cloudfoundry.org/).
+To install it, just run the `cf install-plugin -r CF-Community "java-plugin"` command.
+
+### Manual Installation
+
+Download the binary file for your target OS from the [latest release](releases/latest).
 
 If you've already installed the plugin and are updating it, you must first execute the `cf uninstall-plugin JavaPlugin` command.
 
 Install the plugin with `cf install-plugin [cf-cli-java-plugin]` (replace `[cf-cli-java-plugin]` with the actual binary name you will use, which depends on the OS you are running).
 
 You can verify that the plugin is successfully installed by looking for `JavaPlugin` in the output of `cf plugins`.
-
-### Permission Issues
 
 On Linux and macOS, if you get a permission error, run `chmod +x [cf-cli-java-plugin]` (replace `[cf-cli-java-plugin]` with the actual binary name you will use, which depends on the OS you are running) on the plugin binary.
 On Windows, the plugin will refuse to install unless the binary has the `.exe` file extension.
