@@ -25,12 +25,12 @@ There are three important things to know:
 
 This a checklist of things to keep in your mind when opening pull requests for this project.
 
--1. Before pushing anything, validate your pull request with `go test`
-0. Make sure you have signed the [Contributor License Agreement](#contributor-license-agreement)
-1. Make sure any added dependency is licensed under Apache v2.0 license
-2. Strive for very high unit-test coverage and favor testing productive code over mocks
+0. Before pushing anything, validate your pull request with `go test`
+1. Make sure you have signed the [Contributor License Agreement](#contributor-license-agreement)
+2. Make sure any added dependency is licensed under Apache v2.0 license
+3. Strive for very high unit-test coverage and favor testing productive code over mocks
    (mock in depth wherever possible)
-3. Update the README.md with details of changes to the options
+4. Update the README.md with details of changes to the options
 
 Pull requests will be tested and validated by maintainers. In case small changes are needed (e.g., correcting typos), the maintainers may fix those issues themselves.
 In case of larger issues, you may be asked to apply modifications to your changes before the Pull Request can be merged.
