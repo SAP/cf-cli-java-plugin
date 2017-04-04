@@ -8,6 +8,16 @@ Currently, it allows to:
 
 ## Installation
 
+### Installation via CF Community Repository
+
+Make sure you have the CF Community plugin repository configured or add it via (```cf add-plugin-repo CF-Community http://plugins.cloudfoundry.org```)
+
+Trigger installation of the plugin via
+```
+cf install-plugin -r CF-Community "java-plugin"
+```
+
+### Manual Installation
 Download the binary file for your target OS from the [latest release](https://github.com/SAP/cf-cli-java-plugin/releases/latest).
 
 If you've already installed the plugin and are updating it, you must first execute the `cf uninstall-plugin JavaPlugin` command.
