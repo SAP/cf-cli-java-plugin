@@ -56,7 +56,7 @@ func (u uuidGeneratorImpl) Generate() string {
 
 const (
 	// JavaDetectionCommand is the prologue command to detect on the Garden container if it contains a Java app. Visible for tests
-	JavaDetectionCommand = "if ! pgrep -x \"java\" > /dev/null; then echo \"No 'java' process found running. Are you sure this is a Java app?\" >&2; exit 1; fi;"
+	JavaDetectionCommand = "if ! pgrep -x \"java\" > /dev/null; then echo \"No 'java' process found running. Are you sure this is a Java app?\" >&2; exit 1; fi"
 	heapDumpCommand      = "heap-dump"
 	threadDumpCommand    = "thread-dump"
 )
@@ -167,17 +167,31 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		cfSSHArguments = append(cfSSHArguments, "--app-instance-index", strconv.Itoa(applicationInstance))
 	}
 
-	var remoteCommandTokens = []string{}
+	var remoteCommandTokens = []string{JavaDetectionCommand}
 
 	switch command {
 	case heapDumpCommand:
 		heapdumpFileName := "/tmp/heapdump-" + uuidGenerator.Generate() + ".hprof"
-		remoteCommandTokens = append(remoteCommandTokens, JavaDetectionCommand+"$(find -executable -name jmap | head -1) -dump:format=b,file="+heapdumpFileName+" $(pidof java) > /dev/null", "cat "+heapdumpFileName)
+		remoteCommandTokens = append(remoteCommandTokens,
+			// Check file does not already exist
+			"if [ -f "+heapdumpFileName+" ]; then echo >&2 'Heap dump "+heapdumpFileName+" already exists'; exit 1; fi",
+			/*
+			 * If there is not enough space on the filesystem to write the dump, jmap will create a file
+			 * with size 0, output something about not enough space left on device and exit with status code 0.
+			 * Because YOLO.
+			 *
+			 * Also: if the heap dump file already exists, jmap will output something about the file already
+			 * existing and exit with status code 0. At least it is consistent.
+			 */
+			"OUTPUT=$( $(find -executable -name jmap | head -1) -dump:format=b,file="+heapdumpFileName+" $(pidof java) ) || STATUS_CODE=$?",
+			"if [ ! -s "+heapdumpFileName+" ]; then echo >&2 ${OUTPUT}; exit 1; fi",
+			"if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi",
+			"cat "+heapdumpFileName)
 		if !keepAfterDownload {
 			remoteCommandTokens = append(remoteCommandTokens, "rm -f "+heapdumpFileName)
 		}
 	case threadDumpCommand:
-		remoteCommandTokens = append(remoteCommandTokens, JavaDetectionCommand+"$(find -executable -name jstack | head -1) $(pidof java)")
+		remoteCommandTokens = append(remoteCommandTokens, "$(find -executable -name jstack | head -1) $(pidof java)")
 	}
 
 	cfSSHArguments = append(cfSSHArguments, "--command")
