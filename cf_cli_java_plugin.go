@@ -229,7 +229,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 		Name: "JavaPlugin",
 		Version: plugin.VersionType{
 			Major: 1,
-			Minor: 0,
+			Minor: 1,
 			Build: 0,
 		},
 		MinCliVersion: plugin.VersionType{
