@@ -191,7 +191,10 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			remoteCommandTokens = append(remoteCommandTokens, "rm -f "+heapdumpFileName)
 		}
 	case threadDumpCommand:
-		remoteCommandTokens = append(remoteCommandTokens, "$(find -executable -name jstack | head -1) $(pidof java)")
+		// OpenJDK
+		remoteCommandTokens = append(remoteCommandTokens, "JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n "${JSTACK_COMMAND}" ]; then ${JSTACK_COMMAND} $(pidof java); fi")
+		// SAP JVM
+		remoteCommandTokens = append(remoteCommandTokens, "JVMMON_COMMAND=`find -executable -name jvmmon | head -1`; if [ -z "${JSTACK_COMMAND}" ] && [ -n "${JVMMON_COMMAND}" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi")
 	}
 
 	cfSSHArguments = append(cfSSHArguments, "--command")
