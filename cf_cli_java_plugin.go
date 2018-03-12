@@ -206,7 +206,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			// OpenJDK
 			remoteCommandTokens = append(remoteCommandTokens, "rm -f "+heapdumpFileName)
 			// SAP JVM
-			remoteCommandTokens = append(remoteCommandTokens, "if [ -n \"${HEAP_DUMP_NAME}\" ]; then rm -f ${HEAP_DUMP_NAME}; fi")
+			remoteCommandTokens = append(remoteCommandTokens, "if [ -n \"${HEAP_DUMP_NAME}\" ]; then rm -f ${HEAP_DUMP_NAME} ${HEAP_DUMP_NAME%.*}.addons; fi")
 		}
 	case threadDumpCommand:
 		// OpenJDK
