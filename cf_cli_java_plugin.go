@@ -183,12 +183,28 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			 * Also: if the heap dump file already exists, jmap will output something about the file already
 			 * existing and exit with status code 0. At least it is consistent.
 			 */
-			"OUTPUT=$( $(find -executable -name jmap | head -1) -dump:format=b,file="+heapdumpFileName+" $(pidof java) ) || STATUS_CODE=$?",
+			// OpenJDK: Wrap everything in an if statement in case jmap is available
+			"JMAP_COMMAND=`find -executable -name jmap | head -1`",
+			"if [ -n \"${JMAP_COMMAND}\" ]; then true",
+			"OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file="+heapdumpFileName+" $(pidof java) ) || STATUS_CODE=$?",
 			"if [ ! -s "+heapdumpFileName+" ]; then echo >&2 ${OUTPUT}; exit 1; fi",
 			"if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi",
-			"cat "+heapdumpFileName)
+			"cat "+heapdumpFileName,
+			"fi",
+			// SAP JVM: Wrap everything in an if statement in case jvmmon is available
+			"JVMMON_COMMAND=`find -executable -name jvmmon | head -1`",
+			"if [ -z \"${JMAP_COMMAND}\" ] && [ -n \"${JVMMON_COMMAND}\" ]; then true",
+			"OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -c \"dump heap\" ) || STATUS_CODE=$?",
+			"HEAP_DUMP_NAME=`find -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1`",
+			"if [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi",
+			"if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi",
+			"cat ${HEAP_DUMP_NAME}",
+			"fi")
 		if !keepAfterDownload {
+			// OpenJDK
 			remoteCommandTokens = append(remoteCommandTokens, "rm -f "+heapdumpFileName)
+			// SAP JVM
+			remoteCommandTokens = append(remoteCommandTokens, "if [ -n \"${HEAP_DUMP_NAME}\" ]; then rm -f ${HEAP_DUMP_NAME}; fi")
 		}
 	case threadDumpCommand:
 		remoteCommandTokens = append(remoteCommandTokens, "$(find -executable -name jstack | head -1) $(pidof java)")
