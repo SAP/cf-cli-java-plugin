@@ -303,7 +303,9 @@ var _ = Describe("CfJavaPlugin", func() {
 					Expect(cliOutput).To(Equal(""))
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
-					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--command", JavaDetectionCommand + "; $(find -executable -name jstack | head -1) $(pidof java)"}))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--command", JavaDetectionCommand + "; " +
+						"JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi; " +
+						"JVMMON_COMMAND=`find -executable -name jvmmon | head -1`; if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi"}))
 				})
 
 			})
@@ -323,7 +325,9 @@ var _ = Describe("CfJavaPlugin", func() {
 					Expect(cliOutput).To(Equal(""))
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
-					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--app-instance-index", "4", "--command", JavaDetectionCommand + "; $(find -executable -name jstack | head -1) $(pidof java)"}))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--app-instance-index", "4", "--command", JavaDetectionCommand + "; " +
+						"JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi; " +
+						"JVMMON_COMMAND=`find -executable -name jvmmon | head -1`; if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi"}))
 				})
 
 			})
@@ -358,9 +362,13 @@ var _ = Describe("CfJavaPlugin", func() {
 						return output, err
 					})
 
-					Expect(output).To(Equal("cf ssh my_app --app-instance-index 4 --command '" + JavaDetectionCommand + "; $(find -executable -name jstack | head -1) $(pidof java)'"))
+					Expect(output).To(Equal("cf ssh my_app --app-instance-index 4 --command '" + JavaDetectionCommand + "; " +
+						"JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi; " +
+						"JVMMON_COMMAND=`find -executable -name jvmmon | head -1`; if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi'"))
 					Expect(err).To(BeNil())
-					Expect(cliOutput).To(ContainSubstring("cf ssh my_app --app-instance-index 4 --command '" + JavaDetectionCommand + "; $(find -executable -name jstack | head -1) $(pidof java)'"))
+					Expect(cliOutput).To(ContainSubstring("cf ssh my_app --app-instance-index 4 --command '" + JavaDetectionCommand + "; " +
+						"JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi; " +
+						"JVMMON_COMMAND=`find -executable -name jvmmon | head -1`; if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi'"))
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(0))
 				})
