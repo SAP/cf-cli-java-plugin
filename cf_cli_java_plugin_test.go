@@ -180,7 +180,7 @@ var _ = Describe("CfJavaPlugin", func() {
 					Expect(cliOutput).To(Equal(""))
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
-					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--command", JavaDetectionCommand + "; if [ -f /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 'Heap dump /tmp/heapdump-abcd-123456.hprof already exists'; exit 1; fi; OUTPUT=$( $(find -executable -name jmap | head -1) -dump:format=b,file=/tmp/heapdump-abcd-123456.hprof $(pidof java) ) || STATUS_CODE=$?; if [ ! -s /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; cat /tmp/heapdump-abcd-123456.hprof; rm -f /tmp/heapdump-abcd-123456.hprof"}))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--command", JavaDetectionCommand + "; if [ -f /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 'Heap dump /tmp/heapdump-abcd-123456.hprof already exists'; exit 1; fi; JMAP_COMMAND=`find -executable -name jmap | head -1 | tr -d [:space:]`; if [ -n \"${JMAP_COMMAND}\" ]; then true; OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=/tmp/heapdump-abcd-123456.hprof $(pidof java) ) || STATUS_CODE=$?; if [ ! -s /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; cat /tmp/heapdump-abcd-123456.hprof; exit 0; fi; JVMMON_COMMAND=`find -executable -name jvmmon | head -1 | tr -d [:space:]`; if [ -n \"${JVMMON_COMMAND}\" ]; then true; OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -c \"dump heap\" ) || STATUS_CODE=$?; sleep 5; HEAP_DUMP_NAME=`find -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1`; SIZE=-1; OLD_SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); while [ \"${SIZE}\" != \"${OLD_SIZE}\" ]; do sleep 3; SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); done; if [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; cat ${HEAP_DUMP_NAME}; fi; rm -f /tmp/heapdump-abcd-123456.hprof; if [ -n \"${HEAP_DUMP_NAME}\" ]; then rm -f ${HEAP_DUMP_NAME} ${HEAP_DUMP_NAME%.*}.addons; fi"}))
 				})
 
 			})
@@ -200,7 +200,7 @@ var _ = Describe("CfJavaPlugin", func() {
 					Expect(cliOutput).To(Equal(""))
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
-					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--app-instance-index", "4", "--command", JavaDetectionCommand + "; if [ -f /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 'Heap dump /tmp/heapdump-abcd-123456.hprof already exists'; exit 1; fi; OUTPUT=$( $(find -executable -name jmap | head -1) -dump:format=b,file=/tmp/heapdump-abcd-123456.hprof $(pidof java) ) || STATUS_CODE=$?; if [ ! -s /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; cat /tmp/heapdump-abcd-123456.hprof; rm -f /tmp/heapdump-abcd-123456.hprof"}))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--app-instance-index", "4", "--command", JavaDetectionCommand + "; if [ -f /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 'Heap dump /tmp/heapdump-abcd-123456.hprof already exists'; exit 1; fi; JMAP_COMMAND=`find -executable -name jmap | head -1 | tr -d [:space:]`; if [ -n \"${JMAP_COMMAND}\" ]; then true; OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=/tmp/heapdump-abcd-123456.hprof $(pidof java) ) || STATUS_CODE=$?; if [ ! -s /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; cat /tmp/heapdump-abcd-123456.hprof; exit 0; fi; JVMMON_COMMAND=`find -executable -name jvmmon | head -1 | tr -d [:space:]`; if [ -n \"${JVMMON_COMMAND}\" ]; then true; OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -c \"dump heap\" ) || STATUS_CODE=$?; sleep 5; HEAP_DUMP_NAME=`find -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1`; SIZE=-1; OLD_SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); while [ \"${SIZE}\" != \"${OLD_SIZE}\" ]; do sleep 3; SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); done; if [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; cat ${HEAP_DUMP_NAME}; fi; rm -f /tmp/heapdump-abcd-123456.hprof; if [ -n \"${HEAP_DUMP_NAME}\" ]; then rm -f ${HEAP_DUMP_NAME} ${HEAP_DUMP_NAME%.*}.addons; fi"}))
 				})
 
 			})
@@ -220,7 +220,10 @@ var _ = Describe("CfJavaPlugin", func() {
 					Expect(cliOutput).To(Equal(""))
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
-					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--app-instance-index", "4", "--command", JavaDetectionCommand + "; if [ -f /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 'Heap dump /tmp/heapdump-abcd-123456.hprof already exists'; exit 1; fi; OUTPUT=$( $(find -executable -name jmap | head -1) -dump:format=b,file=/tmp/heapdump-abcd-123456.hprof $(pidof java) ) || STATUS_CODE=$?; if [ ! -s /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; cat /tmp/heapdump-abcd-123456.hprof"}))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--app-instance-index", "4", "--command", JavaDetectionCommand + "; " +
+						"if [ -f /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 'Heap dump /tmp/heapdump-abcd-123456.hprof already exists'; exit 1; fi; " +
+						"JMAP_COMMAND=`find -executable -name jmap | head -1 | tr -d [:space:]`; if [ -n \"${JMAP_COMMAND}\" ]; then true; OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=/tmp/heapdump-abcd-123456.hprof $(pidof java) ) || STATUS_CODE=$?; if [ ! -s /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; cat /tmp/heapdump-abcd-123456.hprof; exit 0; fi; " +
+						"JVMMON_COMMAND=`find -executable -name jvmmon | head -1 | tr -d [:space:]`; if [ -n \"${JVMMON_COMMAND}\" ]; then true; OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -c \"dump heap\" ) || STATUS_CODE=$?; sleep 5; HEAP_DUMP_NAME=`find -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1`; SIZE=-1; OLD_SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); while [ \"${SIZE}\" != \"${OLD_SIZE}\" ]; do sleep 3; SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); done; if [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; cat ${HEAP_DUMP_NAME}; fi"}))
 				})
 
 			})
@@ -235,9 +238,14 @@ var _ = Describe("CfJavaPlugin", func() {
 						return output, err
 					})
 
-					Expect(output).To(Equal("cf ssh my_app --app-instance-index 4 --command '" + JavaDetectionCommand + "; if [ -f /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 'Heap dump /tmp/heapdump-abcd-123456.hprof already exists'; exit 1; fi; OUTPUT=$( $(find -executable -name jmap | head -1) -dump:format=b,file=/tmp/heapdump-abcd-123456.hprof $(pidof java) ) || STATUS_CODE=$?; if [ ! -s /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; cat /tmp/heapdump-abcd-123456.hprof'"))
+					expectedOutput := "cf ssh my_app --app-instance-index 4 --command '" + JavaDetectionCommand + "; " +
+						"if [ -f /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 'Heap dump /tmp/heapdump-abcd-123456.hprof already exists'; exit 1; fi; " +
+						"JMAP_COMMAND=`find -executable -name jmap | head -1 | tr -d [:space:]`; if [ -n \"${JMAP_COMMAND}\" ]; then true; OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=/tmp/heapdump-abcd-123456.hprof $(pidof java) ) || STATUS_CODE=$?; if [ ! -s /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; cat /tmp/heapdump-abcd-123456.hprof; exit 0; fi; " +
+						"JVMMON_COMMAND=`find -executable -name jvmmon | head -1 | tr -d [:space:]`; if [ -n \"${JVMMON_COMMAND}\" ]; then true; OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -c \"dump heap\" ) || STATUS_CODE=$?; sleep 5; HEAP_DUMP_NAME=`find -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1`; SIZE=-1; OLD_SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); while [ \"${SIZE}\" != \"${OLD_SIZE}\" ]; do sleep 3; SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); done; if [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; cat ${HEAP_DUMP_NAME}; fi'"
+
+					Expect(output).To(Equal(expectedOutput))
 					Expect(err).To(BeNil())
-					Expect(cliOutput).To(ContainSubstring("cf ssh my_app --app-instance-index 4 --command '" + JavaDetectionCommand + "; if [ -f /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 'Heap dump /tmp/heapdump-abcd-123456.hprof already exists'; exit 1; fi; OUTPUT=$( $(find -executable -name jmap | head -1) -dump:format=b,file=/tmp/heapdump-abcd-123456.hprof $(pidof java) ) || STATUS_CODE=$?; if [ ! -s /tmp/heapdump-abcd-123456.hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; cat /tmp/heapdump-abcd-123456.hprof'"))
+					Expect(cliOutput).To(ContainSubstring(expectedOutput))
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(0))
 				})
@@ -362,13 +370,13 @@ var _ = Describe("CfJavaPlugin", func() {
 						return output, err
 					})
 
-					Expect(output).To(Equal("cf ssh my_app --app-instance-index 4 --command '" + JavaDetectionCommand + "; " +
+					expectedOutput := "cf ssh my_app --app-instance-index 4 --command '" + JavaDetectionCommand + "; " +
 						"JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi; " +
-						"JVMMON_COMMAND=`find -executable -name jvmmon | head -1`; if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi'"))
+						"JVMMON_COMMAND=`find -executable -name jvmmon | head -1`; if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi'"
+
+					Expect(output).To(Equal(expectedOutput))
 					Expect(err).To(BeNil())
-					Expect(cliOutput).To(ContainSubstring("cf ssh my_app --app-instance-index 4 --command '" + JavaDetectionCommand + "; " +
-						"JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi; " +
-						"JVMMON_COMMAND=`find -executable -name jvmmon | head -1`; if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi'"))
+					Expect(cliOutput).To(ContainSubstring(expectedOutput))
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(0))
 				})

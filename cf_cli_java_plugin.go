@@ -184,16 +184,17 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			 * existing and exit with status code 0. At least it is consistent.
 			 */
 			// OpenJDK: Wrap everything in an if statement in case jmap is available
-			"JMAP_COMMAND=`find -executable -name jmap | head -1`",
+			"JMAP_COMMAND=`find -executable -name jmap | head -1 | tr -d [:space:]`",
 			"if [ -n \"${JMAP_COMMAND}\" ]; then true",
 			"OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file="+heapdumpFileName+" $(pidof java) ) || STATUS_CODE=$?",
 			"if [ ! -s "+heapdumpFileName+" ]; then echo >&2 ${OUTPUT}; exit 1; fi",
 			"if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi",
 			"cat "+heapdumpFileName,
+			"exit 0",
 			"fi",
 			// SAP JVM: Wrap everything in an if statement in case jvmmon is available
-			"JVMMON_COMMAND=`find -executable -name jvmmon | head -1`",
-			"if [ -z \"${JMAP_COMMAND}\" ] && [ -n \"${JVMMON_COMMAND}\" ]; then true",
+			"JVMMON_COMMAND=`find -executable -name jvmmon | head -1 | tr -d [:space:]`",
+			"if [ -n \"${JVMMON_COMMAND}\" ]; then true",
 			"OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -c \"dump heap\" ) || STATUS_CODE=$?",
 			"sleep 5", // Writing the heap dump is triggered asynchronously -> give the jvm some time to create the file
 			"HEAP_DUMP_NAME=`find -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1`",
@@ -247,10 +248,10 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 // to the user in the core commands `cf help`, `cf`, or `cf -h`.
 func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 	return plugin.PluginMetadata{
-		Name: "JavaPlugin",
+		Name: "java",
 		Version: plugin.VersionType{
-			Major: 1,
-			Minor: 1,
+			Major: 2,
+			Minor: 0,
 			Build: 0,
 		},
 		MinCliVersion: plugin.VersionType{

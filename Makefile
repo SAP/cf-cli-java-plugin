@@ -21,7 +21,7 @@ install: compile remove
 
 remove: $(objects)
 ifeq ($(JAVA_PLUGIN_INSTALLED),)
-	cf uninstall-plugin JavaPlugin || true
+	cf uninstall-plugin java || true
 endif
 
 vclean: remove clean
