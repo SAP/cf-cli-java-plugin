@@ -14,17 +14,24 @@ Make sure you have the CF Community plugin repository configured or add it via (
 
 Trigger installation of the plugin via
 ```
-cf install-plugin -r CF-Community "java-plugin"
+cf install-plugin -r CF-Community "java"
 ```
 
 ### Manual Installation
 Download the binary file for your target OS from the [latest release](https://github.com/SAP/cf-cli-java-plugin/releases/latest).
 
-If you've already installed the plugin and are updating it, you must first execute the `cf uninstall-plugin JavaPlugin` command.
+If you've already installed the plugin and are updating it, you must first execute the `cf uninstall-plugin java` command.
 
 Install the plugin with `cf install-plugin [cf-cli-java-plugin]` (replace `[cf-cli-java-plugin]` with the actual binary name you will use, which depends on the OS you are running).
 
-You can verify that the plugin is successfully installed by looking for `JavaPlugin` in the output of `cf plugins`.
+You can verify that the plugin is successfully installed by looking for `java` in the output of `cf plugins`.
+
+### Updating from version 1.x to 2.x
+
+With release 2.0 we aligned the convention of the plugin having the same name as the command it contributes (in our case, `java`).
+This change mostly affects you in the way you update your plugin.
+If you have the version 1.x installed, you will need to uninstall the old version first by using the command: `cf uninstall-plugin JavaPlugin`.
+You know you have the version 1.x installed if `JavaPlugin` appears in the output of `cf plugins`.
 
 ### Permission Issues
 
