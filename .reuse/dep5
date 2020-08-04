@@ -1,0 +1,8 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: java-memory-assistant
+Upstream-Contact: Tim Gerlach <tim.gerlach@sap.com>
+Source: https://github.com/SAP/cf-cli-java-plugin
+
+Files: *
+Copyright:  2017 SAP SE or an SAP affiliate company and Cloud Foundry Command Line Java plugin contributors
+License: Apache-2.0
