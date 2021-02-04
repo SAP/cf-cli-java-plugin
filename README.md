@@ -42,6 +42,25 @@ On Windows, the plugin will refuse to install unless the binary has the `.exe` f
 
 ## Usage
 
+### Prerequisites
+This plugin internally uses `jmap` for OpenJDK-like Java virtual machines. When using the [Cloud Foundry Java Buildpack](https://github.com/cloudfoundry/java-buildpack), `jmap` is no longer shipped by default in order to meet the legal obligations of the Cloud Foundry Foundation.
+To ensure that `jmap` is available in the container of your application, you have to explicitly request a full JDK in your application manifest via the `JBP_CONFIG_OPEN_JDK_JRE` environment variable. This could be done like this:
+
+```yaml
+---
+applications:
+- name: <APP_NAME>
+  memory: 1G
+  path: <PATH_TO_BUILD_ARTIFACT>
+  buildpack: https://github.com/cloudfoundry/java-buildpack
+  env:
+    JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/bionic/x86_64", version: 11.+ } }'
+```
+Please note that this requires the use of an online buildpack (configured in the `buildpack` property). When system buildpacks are used, staging will fail with cache issues, because the system buildpacks don’t have the JDK chached.
+Please also note that this is not to be considered a recommendation to use a full JDK. It's just one option to get the tools required for the use of this plugin when you need it, e.g., for troubleshooting.
+The `version` property is optional and can be used to request a specific Java version.
+
+### Commands
 <pre>
 NAME:
    java - Obtain a heap dump or thread dump from a running, Diego-enabled, SSH-enabled Java application
@@ -57,10 +76,13 @@ OPTIONS:
 
 The heap dump or thread dump (depending on what you execute) will be outputted to `std-out`.
 You may want to redirect the command's output to file, e.g., by executing:
-`cf java heap-dump [my_app] -i [my_instance_index] > heap-dump.hprof`
+
+```shell
+cf java heap-dump [my_app] -i [my_instance_index] > heap-dump.hprof
+```
 
 The `-k` flag is invalid when invoking `cf java thread-dump`.
-(Unlike with heap dumps, the JVM does not need to output the threaddump to file before streaming it out.)
+(Unlike with heap dumps, the JVM does not need to output the thread dump to file before streaming it out.)
 
 ## Limitations
 
