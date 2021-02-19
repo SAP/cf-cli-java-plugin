@@ -43,6 +43,8 @@ On Windows, the plugin will refuse to install unless the binary has the `.exe` f
 ## Usage
 
 ### Prerequisites
+
+#### JDK Tools
 This plugin internally uses `jmap` for OpenJDK-like Java virtual machines. When using the [Cloud Foundry Java Buildpack](https://github.com/cloudfoundry/java-buildpack), `jmap` is no longer shipped by default in order to meet the legal obligations of the Cloud Foundry Foundation.
 To ensure that `jmap` is available in the container of your application, you have to explicitly request a full JDK in your application manifest via the `JBP_CONFIG_OPEN_JDK_JRE` environment variable. This could be done like this:
 
@@ -60,10 +62,23 @@ Please note that this requires the use of an online buildpack (configured in the
 Please also note that this is not to be considered a recommendation to use a full JDK. It's just one option to get the tools required for the use of this plugin when you need it, e.g., for troubleshooting.
 The `version` property is optional and can be used to request a specific Java version.
 
+#### SSH Access
+As it is built directly on `cf ssh`, the `cf java` plugin can work only with Cloud Foundry applications that have `cf ssh` enabled.
+To check if your app fulfills the requirements, you can find out by running the `cf ssh-enabled [app-name]` command.
+If not enabled yet, run `cf enable-ssh [app-name]`.
+
+**Note:** You must restart your app after enabling SSH access.
+
+In case a proxy server is used, ensure that `cf ssh` is configured accordingly.
+Refer to the [official documentation](https://docs.cloudfoundry.org/cf-cli/http-proxy.html#v3-ssh-socks5) of the Cloud Foundry Command Line for more information.
+If `cf java` is having issues connecting to your app, chances are the problem is in the networking issues encountered by `cf ssh`.
+To verify, run your `cf java` command in "dry-run" mode by adding the `-n` flag and try to execute the command line that `cf java` gives you back.
+If it fails, the issue is not in `cf java`, but in whatever makes `cf ssh` fail.
+
 ### Commands
 <pre>
 NAME:
-   java - Obtain a heap dump or thread dump from a running, Diego-enabled, SSH-enabled Java application
+   java - Obtain a heap dump or thread dump from a running, SSH-enabled Java application
 
 USAGE:
    cf java [heap-dump|thread-dump] APP_NAME
@@ -85,14 +100,6 @@ The `-k` flag is invalid when invoking `cf java thread-dump`.
 (Unlike with heap dumps, the JVM does not need to output the thread dump to file before streaming it out.)
 
 ## Limitations
-
-As it is built directly on `cf ssh`, the `cf java` plugin can work only with Diego applications that have `cf ssh` enabled.
-To check if your app fulfills the requirements, you can find out by running the `cf ssh-enabled [app-name]` command.
-
-Also, `cf ssh` is *very* picky with proxies.
-If `cf java` is having issues connecting to your app, chances are the problem is in the networking issues encountered by `cf ssh`.
-To verify, run your `cf java` command in "dry-run" mode by adding the `-n` flag and try to execute the command line that `cf java` gives you back.
-If it fails, the issue is not in `cf java`, but in whatever makes `cf ssh` fail.
 
 The capability of creating heap dumps is also limited by the filesystem available to the container.
 The `cf java heap-dump` command triggers the heap dump to file system, read the content of the file over the SSH connection, and then remove the heap dump file from the container's file system (unless you have the `-k` flag set).
