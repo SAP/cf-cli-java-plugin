@@ -20,6 +20,8 @@ import (
 	"code.cloudfoundry.org/cli/cf/trace"
 	"code.cloudfoundry.org/cli/plugin"
 
+	"utils"
+
 	guuid "github.com/satori/go.uuid"
 	"github.com/simonleung8/flags"
 )
@@ -125,7 +127,9 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	commandFlags.NewIntFlagWithDefault("app-instance-index", "i", "application `instance` to connect to", -1)
 	commandFlags.NewBoolFlag("keep", "k", "whether to `keep` the heap/thread-dump on the container of the application instance after having downloaded it locally")
 	commandFlags.NewBoolFlag("dry-run", "n", "triggers the `dry-run` mode to show only the cf-ssh command that would have been executed")
-
+	commandFlags.NewStringFlag("container-dir", "cd", "specify folder path where the dump file should be stored in the container")
+	commandFlags.NewStringFlag("local-dir", "ld", "specify the folder where the dump file will be downloaded")
+	
 	parseErr := commandFlags.Parse(args[1:]...)
 	if parseErr != nil {
 		return "", &InvalidUsageError{message: fmt.Sprintf("Error while parsing command arguments: %v", parseErr)}
@@ -133,6 +137,10 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 	applicationInstance := commandFlags.Int("app-instance-index")
 	keepAfterDownload := commandFlags.IsSet("keep")
+
+	remoteDir := commandFlags.String("container-dir")
+	localDir := commandFlags.String("local-dir")
+
 
 	arguments := commandFlags.Args()
 	argumentLen := len(arguments)
@@ -168,10 +176,23 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	}
 
 	var remoteCommandTokens = []string{JavaDetectionCommand}
-
+	remoteFileFullPath := ""
+	localFileFullPath:= ""
 	switch command {
 	case heapDumpCommand:
-		heapdumpFileName := "/tmp/heapdump-" + uuidGenerator.Generate() + ".hprof"
+
+		valid, _ :=utils.CheckRequiredTools(applicationName)
+		if !valid{
+			return "", nil
+		}
+		
+		fspath, _ := utils.GetAvailablePath(applicationName, remoteDir)
+		//fmt.Println(fspath)
+		dumpFile := applicationName + "-heapdump-" + uuidGenerator.Generate() + ".hprof"
+		heapdumpFileName := fspath + "/" + dumpFile
+		remoteFileFullPath = fspath + "/" + dumpFile
+		localFileFullPath = localDir + "/" + dumpFile
+
 		remoteCommandTokens = append(remoteCommandTokens,
 			// Check file does not already exist
 			"if [ -f "+heapdumpFileName+" ]; then echo >&2 'Heap dump "+heapdumpFileName+" already exists'; exit 1; fi",
@@ -189,26 +210,28 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			"OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file="+heapdumpFileName+" $(pidof java) ) || STATUS_CODE=$?",
 			"if [ ! -s "+heapdumpFileName+" ]; then echo >&2 ${OUTPUT}; exit 1; fi",
 			"if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi",
-			"cat "+heapdumpFileName,
-			"exit 0",
-			"fi",
+			//"echo "+heapdumpFileName,
+			//"exit 0",
+			//"fi",
 			// SAP JVM: Wrap everything in an if statement in case jvmmon is available
 			"JVMMON_COMMAND=`find -executable -name jvmmon | head -1 | tr -d [:space:]`",
-			"if [ -n \"${JVMMON_COMMAND}\" ]; then true",
+			"elif [ -n \"${JVMMON_COMMAND}\" ]; then true",
 			"OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -c \"dump heap\" ) || STATUS_CODE=$?",
 			"sleep 5", // Writing the heap dump is triggered asynchronously -> give the jvm some time to create the file
 			"HEAP_DUMP_NAME=`find -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1`",
 			"SIZE=-1; OLD_SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); while [ \"${SIZE}\" != \"${OLD_SIZE}\" ]; do sleep 3; SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); done",
 			"if [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi",
 			"if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi",
-			"cat ${HEAP_DUMP_NAME}",
+			//"echo ${HEAP_DUMP_NAME}",
+			//"fi",
 			"fi")
-		if !keepAfterDownload {
+		//if !keepAfterDownload {
+		//	fmt.Println("delete after download")
 			// OpenJDK
-			remoteCommandTokens = append(remoteCommandTokens, "rm -f "+heapdumpFileName)
+			//remoteCommandTokens = append(remoteCommandTokens, "rm -f "+heapdumpFileName)
 			// SAP JVM
-			remoteCommandTokens = append(remoteCommandTokens, "if [ -n \"${HEAP_DUMP_NAME}\" ]; then rm -f ${HEAP_DUMP_NAME} ${HEAP_DUMP_NAME%.*}.addons; fi")
-		}
+			//remoteCommandTokens = append(remoteCommandTokens, "if [ -n \"${HEAP_DUMP_NAME}\" ]; then rm -f ${HEAP_DUMP_NAME} ${HEAP_DUMP_NAME%.*}.addons; fi")
+		//}
 	case threadDumpCommand:
 		// OpenJDK
 		remoteCommandTokens = append(remoteCommandTokens, "JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi")
@@ -229,7 +252,20 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	cfSSHArguments = append(cfSSHArguments, remoteCommand)
 
 	output, err := commandExecutor.Execute(cfSSHArguments)
+	
+	if strings.Compare(command, heapDumpCommand) == 0{
+		
+		finalFile, err := utils.FindDumpFile(applicationName, remoteFileFullPath)
+		if err != nil && finalFile != ""{
+			remoteFileFullPath = finalFile
+		}
+		utils.CopyOverCat(applicationName, remoteFileFullPath, localFileFullPath)
 
+		if !keepAfterDownload{
+			utils.DeleteRemoteFile(applicationName, remoteFileFullPath)
+		}
+	}
+	
 	// We keep this around to make the compiler happy, but commandExecutor.Execute will cause an os.Exit
 	return strings.Join(output, "\n"), err
 }
