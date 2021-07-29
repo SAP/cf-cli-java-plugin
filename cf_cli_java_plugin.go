@@ -141,7 +141,8 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	remoteDir := commandFlags.String("container-dir")
 	localDir := commandFlags.String("local-dir")
 
-
+	copyToLocal := len(localDir) > 0
+	
 	arguments := commandFlags.Args()
 	argumentLen := len(arguments)
 
@@ -259,7 +260,13 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		if err != nil && finalFile != ""{
 			remoteFileFullPath = finalFile
 		}
-		utils.CopyOverCat(applicationName, remoteFileFullPath, localFileFullPath)
+		if copyToLocal{
+			err = utils.CopyOverCat(applicationName, remoteFileFullPath, localFileFullPath)
+			if err == nil {
+				fmt.Println("heap dump filed saved to: " + localFileFullPath)
+			}
+		}
+		
 
 		if !keepAfterDownload{
 			utils.DeleteRemoteFile(applicationName, remoteFileFullPath)

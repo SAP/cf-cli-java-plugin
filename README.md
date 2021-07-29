@@ -87,13 +87,21 @@ OPTIONS:
    -app-instance-index       -i [index], select to which instance of the app to connect
    -dry-run                  -n, just output to command line what would be executed
    -keep                     -k, keep the heap dump in the container; by default the heap dump will be deleted from the container's filesystem after been downloaded
+   -container-dir            -cd, the directory path in the container
+   -local-dir                -ld, the local directory path that the dump file will be saved to
 </pre>
 
-The heap dump or thread dump (depending on what you execute) will be outputted to `std-out`.
+the heap dump will be copied if -local-dir is specified(should be full folder path):
+
+```shell
+cf java heap-dump [my-app] --container-dir /var/fspath --local-dir /local/path
+```
+
+The thread dump will be outputted to `std-out`.
 You may want to redirect the command's output to file, e.g., by executing:
 
 ```shell
-cf java heap-dump [my_app] -i [my_instance_index] > heap-dump.hprof
+cf java thread-dump [my_app] -i [my_instance_index] > heap-dump.hprof
 ```
 
 The `-k` flag is invalid when invoking `cf java thread-dump`.
