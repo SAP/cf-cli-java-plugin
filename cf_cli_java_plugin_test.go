@@ -3,11 +3,13 @@ package main_test
 import (
 	"strings"
 
+	. "utils/fakes"
+
 	. "github.com/SAP/cf-cli-java-plugin"
+
+	io_helpers "code.cloudfoundry.org/cli/cf/util/testhelpers/io"
 	. "github.com/SAP/cf-cli-java-plugin/cmd/fakes"
 	. "github.com/SAP/cf-cli-java-plugin/uuid/fakes"
-
-	io_helpers "code.cloudfoundry.org/cli/util/testhelpers/io"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -53,13 +55,14 @@ var _ = Describe("CfJavaPlugin", func() {
 			subject         *JavaPlugin
 			commandExecutor *FakeCommandExecutor
 			uuidGenerator   *FakeUUIDGenerator
+			pluginUtil      FakeCfJavaPluginUtil
 		)
 
 		BeforeEach(func() {
 			subject = &JavaPlugin{}
 			commandExecutor = new(FakeCommandExecutor)
 			uuidGenerator = new(FakeUUIDGenerator)
-
+			pluginUtil = FakeCfJavaPluginUtil{SshEnabled: true, Jmap_jvmmon_present: true, Container_path_valid: true, Fspath: "/tmp", LocalPathValid: true}
 			uuidGenerator.GenerateReturns("abcd-123456")
 		})
 
@@ -69,7 +72,7 @@ var _ = Describe("CfJavaPlugin", func() {
 				defer close(done)
 
 				output, err, cliOutput := captureOutput(func() (string, error) {
-					output, err := subject.DoRun(commandExecutor, uuidGenerator, []string{"java"})
+					output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java"})
 					return output, err
 				})
 
@@ -89,7 +92,7 @@ var _ = Describe("CfJavaPlugin", func() {
 				defer close(done)
 
 				output, err, cliOutput := captureOutput(func() (string, error) {
-					output, err := subject.DoRun(commandExecutor, uuidGenerator, []string{"java", "heap-dump", "my_app", "ciao"})
+					output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "heap-dump", "my_app", "ciao"})
 					return output, err
 				})
 
@@ -109,7 +112,7 @@ var _ = Describe("CfJavaPlugin", func() {
 				defer close(done)
 
 				output, err, cliOutput := captureOutput(func() (string, error) {
-					output, err := subject.DoRun(commandExecutor, uuidGenerator, []string{"java", "UNKNOWN_COMMAND"})
+					output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "UNKNOWN_COMMAND"})
 					return output, err
 				})
 
@@ -151,7 +154,7 @@ var _ = Describe("CfJavaPlugin", func() {
 					defer close(done)
 
 					output, err, cliOutput := captureOutput(func() (string, error) {
-						output, err := subject.DoRun(commandExecutor, uuidGenerator, []string{"java", "heap-dump", "my_app", "my_file", "ciao"})
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "heap-dump", "my_app", "my_file", "ciao"})
 						return output, err
 					})
 
@@ -171,7 +174,7 @@ var _ = Describe("CfJavaPlugin", func() {
 					defer close(done)
 
 					output, err, cliOutput := captureOutput(func() (string, error) {
-						output, err := subject.DoRun(commandExecutor, uuidGenerator, []string{"java", "heap-dump", "my_app"})
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "heap-dump", "my_app"})
 						return output, err
 					})
 
@@ -191,7 +194,7 @@ var _ = Describe("CfJavaPlugin", func() {
 					defer close(done)
 
 					output, err, cliOutput := captureOutput(func() (string, error) {
-						output, err := subject.DoRun(commandExecutor, uuidGenerator, []string{"java", "heap-dump", "my_app", "-i", "4"})
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "heap-dump", "my_app", "-i", "4"})
 						return output, err
 					})
 
@@ -205,13 +208,73 @@ var _ = Describe("CfJavaPlugin", func() {
 
 			})
 
+			Context("with invalid container direcotry specified", func() {
+
+				It("invoke cf ssh for path check and outputs error", func(done Done) {
+					defer close(done)
+					pluginUtil.Container_path_valid = false
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "heap-dump", "my_app", "--container-dir", "/not/valid/path"})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err).To(ContainSubstring("the container path specified doesn't exist or have no read and write access, please check and try again later"))
+					Expect(cliOutput).To(ContainSubstring("the container path specified doesn't exist or have no read and write access, please check and try again later"))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(0))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal(0))
+				})
+
+			})
+
+			Context("with invalid local direcotry specified", func() {
+
+				It("invoke cf ssh for path check and outputs error", func(done Done) {
+					defer close(done)
+					pluginUtil.LocalPathValid = false
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "heap-dump", "my_app", "--local-dir", "/not/valid/path"})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err).To(ContainSubstring("Error occured during create desination file: /not/valid/path, please check you are allowed to create file in the path."))
+					Expect(cliOutput).To(ContainSubstring("Error occured during create desination file: /not/valid/path, please check you are allowed to create file in the path."))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(0))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal(0))
+				})
+
+			})
+
+			Context("with ssh disabled", func() {
+
+				It("invoke cf ssh for path check and outputs error", func(done Done) {
+					defer close(done)
+					pluginUtil.SshEnabled = false
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "heap-dump", "my_app", "--local-dir", "/valid/path"})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err).To(ContainSubstring("ssh is not enabled for app: 'my_app', please run below 2 shell commands to enable ssh and try again(please note application should be restarted before take effect):\ncf enable-ssh my_app\ncf restart my_app"))
+					Expect(cliOutput).To(ContainSubstring("ssh is not enabled for app: 'my_app', please run below 2 shell commands to enable ssh and try again(please note application should be restarted before take effect):\ncf enable-ssh my_app\ncf restart my_app"))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(0))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal(0))
+				})
+
+			})
+
 			Context("with the --keep flag", func() {
 
 				It("keeps the heap-dump on the container", func(done Done) {
 					defer close(done)
 
 					output, err, cliOutput := captureOutput(func() (string, error) {
-						output, err := subject.DoRun(commandExecutor, uuidGenerator, []string{"java", "heap-dump", "my_app", "-i", "4", "-k"})
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "heap-dump", "my_app", "-i", "4", "-k"})
 						return output, err
 					})
 
@@ -234,7 +297,7 @@ var _ = Describe("CfJavaPlugin", func() {
 					defer close(done)
 
 					output, err, cliOutput := captureOutput(func() (string, error) {
-						output, err := subject.DoRun(commandExecutor, uuidGenerator, []string{"java", "heap-dump", "my_app", "-i", "4", "-k", "-n"})
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "heap-dump", "my_app", "-i", "4", "-k", "-n"})
 						return output, err
 					})
 
@@ -262,7 +325,7 @@ var _ = Describe("CfJavaPlugin", func() {
 					defer close(done)
 
 					output, err, cliOutput := captureOutput(func() (string, error) {
-						output, err := subject.DoRun(commandExecutor, uuidGenerator, []string{"java", "thread-dump"})
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "thread-dump"})
 						return output, err
 					})
 
@@ -282,7 +345,7 @@ var _ = Describe("CfJavaPlugin", func() {
 					defer close(done)
 
 					output, err, cliOutput := captureOutput(func() (string, error) {
-						output, err := subject.DoRun(commandExecutor, uuidGenerator, []string{"java", "thread-dump", "my_app", "my_file", "ciao"})
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "thread-dump", "my_app", "my_file", "ciao"})
 						return output, err
 					})
 
@@ -302,7 +365,7 @@ var _ = Describe("CfJavaPlugin", func() {
 					defer close(done)
 
 					output, err, cliOutput := captureOutput(func() (string, error) {
-						output, err := subject.DoRun(commandExecutor, uuidGenerator, []string{"java", "thread-dump", "my_app"})
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "thread-dump", "my_app"})
 						return output, err
 					})
 
@@ -324,7 +387,7 @@ var _ = Describe("CfJavaPlugin", func() {
 					defer close(done)
 
 					output, err, cliOutput := captureOutput(func() (string, error) {
-						output, err := subject.DoRun(commandExecutor, uuidGenerator, []string{"java", "thread-dump", "my_app", "-i", "4"})
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "thread-dump", "my_app", "-i", "4"})
 						return output, err
 					})
 
@@ -346,7 +409,7 @@ var _ = Describe("CfJavaPlugin", func() {
 					defer close(done)
 
 					output, err, cliOutput := captureOutput(func() (string, error) {
-						output, err := subject.DoRun(commandExecutor, uuidGenerator, []string{"java", "thread-dump", "my_app", "-i", "4", "-k"})
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "thread-dump", "my_app", "-i", "4", "-k"})
 						return output, err
 					})
 
@@ -366,7 +429,7 @@ var _ = Describe("CfJavaPlugin", func() {
 					defer close(done)
 
 					output, err, cliOutput := captureOutput(func() (string, error) {
-						output, err := subject.DoRun(commandExecutor, uuidGenerator, []string{"java", "thread-dump", "my_app", "-i", "4", "-n"})
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "thread-dump", "my_app", "-i", "4", "-n"})
 						return output, err
 					})
 

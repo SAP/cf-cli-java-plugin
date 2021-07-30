@@ -76,18 +76,18 @@ const (
 // user facing errors). The CLI will exit 0 if the plugin exits 0 and will exit
 // 1 should the plugin exit nonzero.
 func (c *JavaPlugin) Run(cliConnection plugin.CliConnection, args []string) {
-	_, err := c.DoRun(&commandExecutorImpl{cliConnection: cliConnection}, &uuidGeneratorImpl{}, args)
+	_, err := c.DoRun(&commandExecutorImpl{cliConnection: cliConnection}, &uuidGeneratorImpl{}, utils.CfJavaPluginUtilImpl{}, args)
 	if err != nil {
 		os.Exit(1)
 	}
 }
 
 // DoRun is an internal method that we use to wrap the cmd package with CommandExecutor for test purposes
-func (c *JavaPlugin) DoRun(commandExecutor cmd.CommandExecutor, uuidGenerator uuid.UUIDGenerator, args []string) (string, error) {
+func (c *JavaPlugin) DoRun(commandExecutor cmd.CommandExecutor, uuidGenerator uuid.UUIDGenerator, util utils.CfJavaPluginUtilImpl, args []string) (string, error) {
 	traceLogger := trace.NewLogger(os.Stdout, true, os.Getenv("CF_TRACE"), "")
 	ui := terminal.NewUI(os.Stdin, os.Stdout, terminal.NewTeePrinter(os.Stdout), traceLogger)
 
-	output, err := c.execute(commandExecutor, uuidGenerator, args)
+	output, err := c.execute(commandExecutor, uuidGenerator, util, args)
 	if err != nil {
 		ui.Failed(err.Error())
 
@@ -103,7 +103,7 @@ func (c *JavaPlugin) DoRun(commandExecutor cmd.CommandExecutor, uuidGenerator uu
 	return output, err
 }
 
-func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator uuid.UUIDGenerator, args []string) (string, error) {
+func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator uuid.UUIDGenerator, util utils.CfJavaPluginUtilImpl, args []string) (string, error) {
 	if len(args) == 0 {
 		return "", &InvalidUsageError{message: "No command provided"}
 	}
@@ -129,7 +129,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	commandFlags.NewBoolFlag("dry-run", "n", "triggers the `dry-run` mode to show only the cf-ssh command that would have been executed")
 	commandFlags.NewStringFlag("container-dir", "cd", "specify the folder path where the dump file should be stored in the container")
 	commandFlags.NewStringFlag("local-dir", "ld", "specify the folder where the dump file will be downloaded to")
-	
+
 	parseErr := commandFlags.Parse(args[1:]...)
 	if parseErr != nil {
 		return "", &InvalidUsageError{message: fmt.Sprintf("Error while parsing command arguments: %v", parseErr)}
@@ -142,7 +142,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	localDir := commandFlags.String("local-dir")
 
 	copyToLocal := len(localDir) > 0
-	
+
 	arguments := commandFlags.Args()
 	argumentLen := len(arguments)
 
@@ -158,7 +158,12 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		if commandFlags.IsSet("keep") {
 			return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for thread-dumps", "keep")}
 		}
-		break
+		if commandFlags.IsSet("container-dir") {
+			return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for thread-dumps", "container-dir")}
+		}
+		if commandFlags.IsSet("local-dir") {
+			return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for thread-dumps", "local-dir")}
+		}
 	default:
 		return "", &InvalidUsageError{message: fmt.Sprintf("Unrecognized command %q: supported commands are 'heap-dump' and 'thread-dump' (see cf help)", command)}
 	}
@@ -177,21 +182,22 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	}
 
 	var remoteCommandTokens = []string{JavaDetectionCommand}
-	remoteFileFullPath := ""
-	localFileFullPath:= ""
+	heapdumpFileName := ""
+	localFileFullPath := ""
 	switch command {
 	case heapDumpCommand:
 
-		valid, _ :=utils.CheckRequiredTools(applicationName)
-		if !valid{
-			return "", nil
+		supported, err := util.CheckRequiredTools(applicationName)
+		if err != nil || !supported {
+			return "required tools checking failed", err
 		}
-		
-		fspath, _ := utils.GetAvailablePath(applicationName, remoteDir)
-		//fmt.Println(fspath)
+
+		fspath, err := util.GetAvailablePath(applicationName, remoteDir)
+		if err != nil {
+			return "", err
+		}
 		dumpFile := applicationName + "-heapdump-" + uuidGenerator.Generate() + ".hprof"
-		heapdumpFileName := fspath + "/" + dumpFile
-		remoteFileFullPath = fspath + "/" + dumpFile
+		heapdumpFileName = fspath + "/" + dumpFile
 		localFileFullPath = localDir + "/" + dumpFile
 
 		remoteCommandTokens = append(remoteCommandTokens,
@@ -211,9 +217,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			"OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file="+heapdumpFileName+" $(pidof java) ) || STATUS_CODE=$?",
 			"if [ ! -s "+heapdumpFileName+" ]; then echo >&2 ${OUTPUT}; exit 1; fi",
 			"if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi",
-			//"echo "+heapdumpFileName,
-			//"exit 0",
-			//"fi",
+
 			// SAP JVM: Wrap everything in an if statement in case jvmmon is available
 			"JVMMON_COMMAND=`find -executable -name jvmmon | head -1 | tr -d [:space:]`",
 			"elif [ -n \"${JVMMON_COMMAND}\" ]; then true",
@@ -223,16 +227,8 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			"SIZE=-1; OLD_SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); while [ \"${SIZE}\" != \"${OLD_SIZE}\" ]; do sleep 3; SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); done",
 			"if [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi",
 			"if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi",
-			//"echo ${HEAP_DUMP_NAME}",
-			//"fi",
 			"fi")
-		//if !keepAfterDownload {
-		//	fmt.Println("delete after download")
-			// OpenJDK
-			//remoteCommandTokens = append(remoteCommandTokens, "rm -f "+heapdumpFileName)
-			// SAP JVM
-			//remoteCommandTokens = append(remoteCommandTokens, "if [ -n \"${HEAP_DUMP_NAME}\" ]; then rm -f ${HEAP_DUMP_NAME} ${HEAP_DUMP_NAME%.*}.addons; fi")
-		//}
+
 	case threadDumpCommand:
 		// OpenJDK
 		remoteCommandTokens = append(remoteCommandTokens, "JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi")
@@ -253,26 +249,26 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	cfSSHArguments = append(cfSSHArguments, remoteCommand)
 
 	output, err := commandExecutor.Execute(cfSSHArguments)
-	
-	if strings.Compare(command, heapDumpCommand) == 0{
-		
-		finalFile, err := utils.FindDumpFile(applicationName, remoteFileFullPath)
-		if err != nil && finalFile != ""{
-			remoteFileFullPath = finalFile
+	if command == heapDumpCommand {
+
+		finalFile, err := util.FindDumpFile(applicationName, heapdumpFileName)
+		if err != nil && finalFile != "" {
+			heapdumpFileName = finalFile
 		}
-		if copyToLocal{
-			err = utils.CopyOverCat(applicationName, remoteFileFullPath, localFileFullPath)
+
+		if copyToLocal {
+			err = util.CopyOverCat(applicationName, heapdumpFileName, localFileFullPath)
 			if err == nil {
 				fmt.Println("heap dump filed saved to: " + localFileFullPath)
+			} else {
+				fmt.Fprintln(os.Stderr, err.Error())
 			}
 		}
-		
 
-		if !keepAfterDownload{
-			utils.DeleteRemoteFile(applicationName, remoteFileFullPath)
+		if !keepAfterDownload {
+			util.DeleteRemoteFile(applicationName, heapdumpFileName)
 		}
 	}
-	
 	// We keep this around to make the compiler happy, but commandExecutor.Execute will cause an os.Exit
 	return strings.Join(output, "\n"), err
 }
@@ -315,6 +311,8 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 						"app-instance-index": "-i [index], select to which instance of the app to connect",
 						"keep":               "-k, keep the heap dump in the container; by default the heap dump will be deleted from the container's filesystem after been downloaded",
 						"dry-run":            "-n, just output to command line what would be executed",
+						"container-dir":      "-cd, the directory path in the container that the heap dump file will be saved to",
+						"local-dir":          "-ld, the local directory path that the dump file will be saved to",
 					},
 				},
 			},

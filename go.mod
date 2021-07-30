@@ -16,10 +16,12 @@ require (
 	github.com/lunixbochs/vtclean v1.0.0 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/onsi/ginkgo v1.16.4 // indirect
+	github.com/onsi/gomega v1.14.0 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/simonleung8/flags v0.0.0-20170704170018-8020ed7bcf1a
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/vito/go-interact v1.0.0 // indirect
+	golang.org/x/tools v0.1.5 // indirect
 	gopkg.in/cheggaaa/pb.v1 v1.0.28 // indirect
 	utils v1.0.0
 )

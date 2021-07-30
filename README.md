@@ -87,7 +87,7 @@ OPTIONS:
    -app-instance-index       -i [index], select to which instance of the app to connect
    -dry-run                  -n, just output to command line what would be executed
    -keep                     -k, keep the heap dump in the container; by default the heap dump will be deleted from the container's filesystem after been downloaded
-   -container-dir            -cd, the directory path in the container
+   -container-dir            -cd, the directory path in the container that the heap dump file will be saved to
    -local-dir                -ld, the local directory path that the dump file will be saved to
 </pre>
 
