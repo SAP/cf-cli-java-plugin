@@ -128,7 +128,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	commandFlags.NewBoolFlag("keep", "k", "whether to `keep` the heap/thread-dump on the container of the application instance after having downloaded it locally")
 	commandFlags.NewBoolFlag("dry-run", "n", "triggers the `dry-run` mode to show only the cf-ssh command that would have been executed")
 	commandFlags.NewStringFlag("container-dir", "cd", "specify the folder path where the dump file should be stored in the container")
-	commandFlags.NewStringFlag("local-dir", "ld", "specify the folder where the dump file will be downloaded")
+	commandFlags.NewStringFlag("local-dir", "ld", "specify the folder where the dump file will be downloaded to")
 	
 	parseErr := commandFlags.Parse(args[1:]...)
 	if parseErr != nil {
