@@ -91,7 +91,7 @@ OPTIONS:
    -local-dir                -ld, the local directory path that the dump file will be saved to
 </pre>
 
-the heap dump will be copied if -local-dir is specified(should be full folder path):
+The heap dump will be copied if `-local-dir` is specified (should be full folder path):
 
 ```shell
 cf java heap-dump [my-app] --container-dir /var/fspath --local-dir /local/path
