@@ -261,12 +261,15 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			if err == nil {
 				fmt.Println("heap dump filed saved to: " + localFileFullPath)
 			} else {
-				fmt.Fprintln(os.Stderr, err.Error())
+				return "", err
 			}
 		}
 
 		if !keepAfterDownload {
-			util.DeleteRemoteFile(applicationName, heapdumpFileName)
+			err = util.DeleteRemoteFile(applicationName, heapdumpFileName)
+			if err != nil {
+				return "", err
+			}
 		}
 	}
 	// We keep this around to make the compiler happy, but commandExecutor.Execute will cause an os.Exit
