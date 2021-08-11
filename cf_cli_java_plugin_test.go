@@ -228,7 +228,7 @@ var _ = Describe("CfJavaPlugin", func() {
 
 			})
 
-			Context("with invalid local direcotry specified", func() {
+			Context("with invalid local directory specified", func() {
 
 				It("invoke cf ssh for path check and outputs error", func(done Done) {
 					defer close(done)
