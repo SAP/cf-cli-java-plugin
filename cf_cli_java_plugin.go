@@ -128,7 +128,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	commandFlags.NewBoolFlag("keep", "k", "whether to `keep` the heap/thread-dump on the container of the application instance after having downloaded it locally")
 	commandFlags.NewBoolFlag("dry-run", "n", "triggers the `dry-run` mode to show only the cf-ssh command that would have been executed")
 	commandFlags.NewStringFlag("container-dir", "cd", "specify the folder path where the dump file should be stored in the container")
-	commandFlags.NewStringFlag("local-dir", "ld", "specify the folder where the dump file will be downloaded to")
+	commandFlags.NewStringFlag("local-dir", "ld", "specify the folder where the dump file will be downloaded to, dump file wil not be copied to local if this parameter  was not set")
 
 	parseErr := commandFlags.Parse(args[1:]...)
 	if parseErr != nil {
@@ -183,7 +183,6 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 	var remoteCommandTokens = []string{JavaDetectionCommand}
 	heapdumpFileName := ""
-	localFileFullPath := ""
 	switch command {
 	case heapDumpCommand:
 
@@ -196,9 +195,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		if err != nil {
 			return "", err
 		}
-		dumpFile := applicationName + "-heapdump-" + uuidGenerator.Generate() + ".hprof"
-		heapdumpFileName = fspath + "/" + dumpFile
-		localFileFullPath = localDir + "/" + dumpFile
+		heapdumpFileName = fspath + "/" + applicationName + "-heapdump-" + uuidGenerator.Generate() + ".hprof"
 
 		remoteCommandTokens = append(remoteCommandTokens,
 			// Check file does not already exist
@@ -257,12 +254,15 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		}
 
 		if copyToLocal {
+			localFileFullPath := localDir + "/" + applicationName + "-heapdump-" + uuidGenerator.Generate() + ".hprof"
 			err = util.CopyOverCat(applicationName, heapdumpFileName, localFileFullPath)
 			if err == nil {
 				fmt.Println("heap dump filed saved to: " + localFileFullPath)
 			} else {
 				return "", err
 			}
+		} else {
+			fmt.Println("heap dump will not be copied as parameter `local-dir` was not set")
 		}
 
 		if !keepAfterDownload {
@@ -270,6 +270,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			if err != nil {
 				return "", err
 			}
+			fmt.Println("heap dump filed deleted in app container")
 		}
 	}
 	// We keep this around to make the compiler happy, but commandExecutor.Execute will cause an os.Exit

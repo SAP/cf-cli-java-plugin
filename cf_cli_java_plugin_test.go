@@ -239,8 +239,8 @@ var _ = Describe("CfJavaPlugin", func() {
 					})
 
 					Expect(output).To(BeEmpty())
-					Expect(err).To(ContainSubstring("Error occured during create desination file: /not/valid/path, please check you are allowed to create file in the path."))
-					Expect(cliOutput).To(ContainSubstring("Error occured during create desination file: /not/valid/path, please check you are allowed to create file in the path."))
+					Expect(err).To(ContainSubstring("Error creating local file at : /not/valid/path. Please check that you are allowed to create files at the given local path."))
+					Expect(cliOutput).To(ContainSubstring("Error creating local file at : /not/valid/path. Please check that you are allowed to create files at the given local path."))
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(0))
 					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal(0))
