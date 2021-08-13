@@ -103,7 +103,7 @@ func (checker CfJavaPluginUtilImpl) CheckRequiredTools(app string) (bool, error)
 		return false, errors.New("ssh is not enabled for app: '" + app + "', please run below 2 shell commands to enable ssh and try again(please note application should be restarted before take effect):\ncf enable-ssh " + app + "\ncf restart " + app)
 	}
 
-	output, err = exec.Command("cf", "ssh", app, "-c", "find -executable -name jvmmon | head -1 | tr -d [:space:] | find -executable -name jmap | head -1 | tr -d [:space:]").Output()
+	output, err = exec.Command("cf", "ssh", app, "-c", "find -executable -name jvmmon | head -1 | tr -d [:space:] || find -executable -name jmap | head -1 | tr -d [:space:]").Output()
 	if err != nil {
 		return false, errors.New("unknown error occured while checking existence of required tools jvmmon/jmap")
 
@@ -160,7 +160,6 @@ func (checker CfJavaPluginUtilImpl) CopyOverCat(app string, src string, dest str
 		return errors.New("Error creating local file at  " + dest + ". Please check that you are allowed to create files at the given local path.")
 	}
 	defer f.Close()
-
 	cat := exec.Command("cf", "ssh", app, "-c", "cat "+src)
 
 	cat.Stdout = f
