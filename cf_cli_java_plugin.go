@@ -250,6 +250,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		finalFile, err := util.FindDumpFile(applicationName, heapdumpFileName)
 		if err == nil && finalFile != "" {
 			heapdumpFileName = finalFile
+			fmt.Println("successfully created heap dump in application container at: " + heapdumpFileName)
 		}
 
 		if copyToLocal {
