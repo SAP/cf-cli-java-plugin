@@ -94,7 +94,7 @@ OPTIONS:
 The heap dump will be copied if `-local-dir` is specified (should be full folder path):
 
 ```shell
-cf java heap-dump [my-app] --container-dir /var/fspath --local-dir /local/path
+cf java heap-dump [my-app] -local-dir /local/path [-container-dir /var/fspath]
 ```
 
 The thread dump will be outputted to `std-out`.
