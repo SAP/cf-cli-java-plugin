@@ -91,7 +91,10 @@ OPTIONS:
    -local-dir                -ld, the local directory path that the dump file will be saved to
 </pre>
 
-The heap dump will be copied if `-local-dir` is specified (should be full folder path):
+The heap dump will be copied to a local file if `-local-dir` is specified as a full folder path. Without providing `-local-dir` the heap dump will only be created in the container and not transferred.
+To save disk space of the application container, heap dumps are automatically deleted unless the `-keep` option is set.
+
+Providing `-container-dir` is optional. If specified the plugin will create the heap dump at the given file path in the application container. Without providing this parameter, the heap dump will be created either at `/tmp` or at the file path of a file system service if attached to the container.
 
 ```shell
 cf java heap-dump [my-app] -local-dir /local/path [-container-dir /var/fspath]
