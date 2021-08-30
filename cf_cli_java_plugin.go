@@ -183,6 +183,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 	var remoteCommandTokens = []string{JavaDetectionCommand}
 	heapdumpFileName := ""
+	fspath := remoteDir
 	switch command {
 	case heapDumpCommand:
 
@@ -191,11 +192,11 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			return "required tools checking failed", err
 		}
 
-		fspath, err := util.GetAvailablePath(applicationName, remoteDir)
+		fspath, err = util.GetAvailablePath(applicationName, remoteDir)
 		if err != nil {
 			return "", err
 		}
-		heapdumpFileName = fspath + "/" + applicationName + "-heapdump-" + uuidGenerator.Generate() + ".hprof"
+		heapdumpFileName := fspath + "/" + applicationName + "-heapdump-" + uuidGenerator.Generate() + ".hprof"
 
 		remoteCommandTokens = append(remoteCommandTokens,
 			// Check file does not already exist
@@ -217,9 +218,10 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			"if [ ! -s "+heapdumpFileName+" ]; then echo >&2 ${OUTPUT}; exit 1; fi",
 			"if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi",
 			"elif [ -n \"${JVMMON_COMMAND}\" ]; then true",
-			"OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -c \"dump heap\" ) || STATUS_CODE=$?",
+			"echo -e 'change command line flag flags=-XX:HeapDumpOnDemandPath="+fspath+"\ndump heap' > setHeapDumpOnDemandPath.sh",
+			"OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -cmd \"setHeapDumpOnDemandPath.sh\" ) || STATUS_CODE=$?",
 			"sleep 5", // Writing the heap dump is triggered asynchronously -> give the jvm some time to create the file
-			"HEAP_DUMP_NAME=`find -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1`",
+			"HEAP_DUMP_NAME=`find "+fspath+" -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1`",
 			"SIZE=-1; OLD_SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); while [ ${SIZE} != ${OLD_SIZE} ]; do OLD_SIZE=${SIZE}; sleep 3; SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); done",
 			"if [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi",
 			"if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi",
@@ -247,7 +249,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	output, err := commandExecutor.Execute(cfSSHArguments)
 	if command == heapDumpCommand {
 
-		finalFile, err := util.FindDumpFile(applicationName, heapdumpFileName)
+		finalFile, err := util.FindDumpFile(applicationName, heapdumpFileName, fspath)
 		if err == nil && finalFile != "" {
 			heapdumpFileName = finalFile
 			fmt.Println("successfully created heap dump in application container at: " + heapdumpFileName)

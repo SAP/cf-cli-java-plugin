@@ -188,8 +188,8 @@ func (checker CfJavaPluginUtilImpl) DeleteRemoteFile(app string, path string) er
 	return nil
 }
 
-func (checker CfJavaPluginUtilImpl) FindDumpFile(app string, path string) (string, error) {
-	cmd := " [ -f '" + path + "' ] && echo '" + path + "' ||  find -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1  "
+func (checker CfJavaPluginUtilImpl) FindDumpFile(app string, fullpath string, fspath string) (string, error) {
+	cmd := " [ -f '" + fullpath + "' ] && echo '" + fullpath + "' ||  find " + fspath + " -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1  "
 
 	output, err := exec.Command("cf", "ssh", app, "-c", cmd).Output()
 
