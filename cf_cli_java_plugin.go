@@ -301,7 +301,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 	return plugin.PluginMetadata{
 		Name: "java",
 		Version: plugin.VersionType{
-			Major: 2,
+			Major: 3,
 			Minor: 0,
 			Build: 0,
 		},
