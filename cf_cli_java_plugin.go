@@ -196,7 +196,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		if err != nil {
 			return "", err
 		}
-		heapdumpFileName := fspath + "/" + applicationName + "-heapdump-" + uuidGenerator.Generate() + ".hprof"
+		heapdumpFileName = fspath + "/" + applicationName + "-heapdump-" + uuidGenerator.Generate() + ".hprof"
 
 		remoteCommandTokens = append(remoteCommandTokens,
 			// Check file does not already exist
@@ -252,19 +252,25 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		finalFile, err := util.FindDumpFile(applicationName, heapdumpFileName, fspath)
 		if err == nil && finalFile != "" {
 			heapdumpFileName = finalFile
-			fmt.Println("successfully created heap dump in application container at: " + heapdumpFileName)
+			fmt.Println("Successfully created heap dump in application container at: " + heapdumpFileName)
+		} else {
+		    fmt.Println("Failed to find heap dump in application container")
+		    fmt.Println(finalFile)
+		    fmt.Println(heapdumpFileName)
+		    fmt.Println(fspath)
+		    return "", err
 		}
 
 		if copyToLocal {
 			localFileFullPath := localDir + "/" + applicationName + "-heapdump-" + uuidGenerator.Generate() + ".hprof"
 			err = util.CopyOverCat(applicationName, heapdumpFileName, localFileFullPath)
 			if err == nil {
-				fmt.Println("heap dump filed saved to: " + localFileFullPath)
+				fmt.Println("Heap dump filed saved to: " + localFileFullPath)
 			} else {
 				return "", err
 			}
 		} else {
-			fmt.Println("heap dump will not be copied as parameter `local-dir` was not set")
+			fmt.Println("Heap dump will not be copied as parameter `local-dir` was not set")
 		}
 
 		if !keepAfterDownload {
@@ -272,7 +278,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			if err != nil {
 				return "", err
 			}
-			fmt.Println("heap dump filed deleted in app container")
+			fmt.Println("Heap dump filed deleted in app container")
 		}
 	}
 	// We keep this around to make the compiler happy, but commandExecutor.Execute will cause an os.Exit
@@ -307,7 +313,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 		Commands: []plugin.Command{
 			{
 				Name:     "java",
-				HelpText: "Obtain a heap-dump or thread-dump from a running, Diego-enabled, SSH-enabled Java application.",
+				HelpText: "Obtain a heap-dump or thread-dump from a running, SSH-enabled Java application.",
 
 				// UsageDetails is optional
 				// It is used to show help of usage of each command

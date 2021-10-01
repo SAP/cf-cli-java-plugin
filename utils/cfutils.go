@@ -194,8 +194,7 @@ func (checker CfJavaPluginUtilImpl) FindDumpFile(app string, fullpath string, fs
 	output, err := exec.Command("cf", "ssh", app, "-c", cmd).Output()
 
 	if err != nil {
-		return "", errors.New("error occured while checking the generated file")
-
+		return "", errors.New("error while checking the generated file")
 	}
 
 	return strings.Trim(string(output[:]), "\n"), nil
