@@ -94,12 +94,18 @@ func checkUserPathAvailability(app string, path string) (bool, error) {
 }
 
 func (checker CfJavaPluginUtilImpl) CheckRequiredTools(app string) (bool, error) {
-	output, err := exec.Command("cf", "ssh-enabled", app).Output()
+	guid, err := exec.Command("cf", "app", app, "--guid").Output()
 	if err != nil {
 		return false, err
 	}
-	if !strings.Contains(string(output[:]), "ssh support is enabled for app '"+app+"'.") {
+	output, err := exec.Command("cf", "curl", "/v3/apps/"+strings.TrimSuffix(string(guid), "\n")+"/ssh_enabled").Output()
+	if err != nil {
+		return false, err
+	}
+	var result map[string]interface{}
+	json.Unmarshal([]byte(output), &result)
 
+	if enabled, ok := result["enabled"].(bool); !ok || !enabled {
 		return false, errors.New("ssh is not enabled for app: '" + app + "', please run below 2 shell commands to enable ssh and try again(please note application should be restarted before take effect):\ncf enable-ssh " + app + "\ncf restart " + app)
 	}
 
