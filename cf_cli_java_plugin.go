@@ -265,7 +265,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			localFileFullPath := localDir + "/" + applicationName + "-heapdump-" + uuidGenerator.Generate() + ".hprof"
 			err = util.CopyOverCat(applicationName, heapdumpFileName, localFileFullPath)
 			if err == nil {
-				fmt.Println("Heap dump filed saved to: " + localFileFullPath)
+				fmt.Println("Heap dump file saved to: " + localFileFullPath)
 			} else {
 				return "", err
 			}
@@ -278,7 +278,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			if err != nil {
 				return "", err
 			}
-			fmt.Println("Heap dump filed deleted in app container")
+			fmt.Println("Heap dump file deleted in app container")
 		}
 	}
 	// We keep this around to make the compiler happy, but commandExecutor.Execute will cause an os.Exit
