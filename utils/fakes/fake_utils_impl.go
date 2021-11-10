@@ -2,7 +2,6 @@ package fakes
 
 import (
 	"errors"
-	"os/exec"
 	"strings"
 )
 
@@ -12,6 +11,8 @@ type FakeCfJavaPluginUtil struct {
 	Container_path_valid bool
 	Fspath               string
 	LocalPathValid       bool
+	UUID                 string
+	OutputFileName       string
 }
 
 func (fakeUtil FakeCfJavaPluginUtil) CheckRequiredTools(app string) (bool, error) {
@@ -59,9 +60,7 @@ func (fake FakeCfJavaPluginUtil) CopyOverCat(app string, src string, dest string
 }
 
 func (fake FakeCfJavaPluginUtil) DeleteRemoteFile(app string, path string) error {
-	_, err := exec.Command("cf", "ssh", app, "-c", "rm "+path).Output()
-
-	if err != nil {
+	if path != fake.Fspath+"/"+fake.OutputFileName {
 		return errors.New("error occured while removing dump file generated")
 
 	}
@@ -69,15 +68,13 @@ func (fake FakeCfJavaPluginUtil) DeleteRemoteFile(app string, path string) error
 	return nil
 }
 
-func (fake FakeCfJavaPluginUtil) FindDumpFile(app string, path string) (string, error) {
-	cmd := " [ -f '" + path + "' ] && echo '" + path + "' ||  find -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1  "
+func (fake FakeCfJavaPluginUtil) FindDumpFile(app string, fullpath string, fspath string) (string, error) {
 
-	output, err := exec.Command("cf", "ssh", app, "-c", cmd).Output()
-
-	if err != nil {
-		return "", errors.New("error occured while checking the generated file")
-
+	expectedFullPath := fake.Fspath + "/" + app + "-heapdump-" + fake.UUID + ".hprof"
+	if fspath != fake.Fspath || fullpath != expectedFullPath {
+		return "", errors.New("error while checking the generated file")
 	}
+	output := fspath + "/" + fake.OutputFileName
 
 	return strings.Trim(string(output[:]), "\n"), nil
 

@@ -83,7 +83,7 @@ func (c *JavaPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 }
 
 // DoRun is an internal method that we use to wrap the cmd package with CommandExecutor for test purposes
-func (c *JavaPlugin) DoRun(commandExecutor cmd.CommandExecutor, uuidGenerator uuid.UUIDGenerator, util utils.CfJavaPluginUtilImpl, args []string) (string, error) {
+func (c *JavaPlugin) DoRun(commandExecutor cmd.CommandExecutor, uuidGenerator uuid.UUIDGenerator, util utils.CfJavaPluginUtil, args []string) (string, error) {
 	traceLogger := trace.NewLogger(os.Stdout, true, os.Getenv("CF_TRACE"), "")
 	ui := terminal.NewUI(os.Stdin, os.Stdout, terminal.NewTeePrinter(os.Stdout), traceLogger)
 
@@ -103,7 +103,7 @@ func (c *JavaPlugin) DoRun(commandExecutor cmd.CommandExecutor, uuidGenerator uu
 	return output, err
 }
 
-func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator uuid.UUIDGenerator, util utils.CfJavaPluginUtilImpl, args []string) (string, error) {
+func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator uuid.UUIDGenerator, util utils.CfJavaPluginUtil, args []string) (string, error) {
 	if len(args) == 0 {
 		return "", &InvalidUsageError{message: "No command provided"}
 	}
@@ -254,11 +254,11 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			heapdumpFileName = finalFile
 			fmt.Println("Successfully created heap dump in application container at: " + heapdumpFileName)
 		} else {
-		    fmt.Println("Failed to find heap dump in application container")
-		    fmt.Println(finalFile)
-		    fmt.Println(heapdumpFileName)
-		    fmt.Println(fspath)
-		    return "", err
+			fmt.Println("Failed to find heap dump in application container")
+			fmt.Println(finalFile)
+			fmt.Println(heapdumpFileName)
+			fmt.Println(fspath)
+			return "", err
 		}
 
 		if copyToLocal {
