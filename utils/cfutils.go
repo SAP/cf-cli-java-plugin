@@ -160,13 +160,15 @@ func (checker CfJavaPluginUtilImpl) GetAvailablePath(data string, userpath strin
 	return "/tmp", nil
 }
 
-func (checker CfJavaPluginUtilImpl) CopyOverCat(app string, src string, dest string) error {
+func (checker CfJavaPluginUtilImpl) CopyOverCat(args []string, src string, dest string) error {
 	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		return errors.New("Error creating local file at  " + dest + ". Please check that you are allowed to create files at the given local path.")
 	}
 	defer f.Close()
-	cat := exec.Command("cf", "ssh", app, "-c", "cat "+src)
+
+	args = append(args, "cat "+src)
+	cat := exec.Command("cf", args...)
 
 	cat.Stdout = f
 
@@ -183,8 +185,9 @@ func (checker CfJavaPluginUtilImpl) CopyOverCat(app string, src string, dest str
 	return nil
 }
 
-func (checker CfJavaPluginUtilImpl) DeleteRemoteFile(app string, path string) error {
-	_, err := exec.Command("cf", "ssh", app, "-c", "rm "+path).Output()
+func (checker CfJavaPluginUtilImpl) DeleteRemoteFile(args []string, path string) error {
+	args = append(args, "rm "+path)
+	_, err := exec.Command("cf", args...).Output()
 
 	if err != nil {
 		return errors.New("error occured while removing dump file generated")
@@ -194,10 +197,11 @@ func (checker CfJavaPluginUtilImpl) DeleteRemoteFile(app string, path string) er
 	return nil
 }
 
-func (checker CfJavaPluginUtilImpl) FindDumpFile(app string, fullpath string, fspath string) (string, error) {
+func (checker CfJavaPluginUtilImpl) FindDumpFile(args []string, fullpath string, fspath string) (string, error) {
 	cmd := " [ -f '" + fullpath + "' ] && echo '" + fullpath + "' ||  find " + fspath + " -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1  "
 
-	output, err := exec.Command("cf", "ssh", app, "-c", cmd).Output()
+	args = append(args, cmd)
+	output, err := exec.Command("cf", args...).Output()
 
 	if err != nil {
 		return "", errors.New("error while checking the generated file")

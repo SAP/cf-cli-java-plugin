@@ -50,7 +50,7 @@ func (fake FakeCfJavaPluginUtil) GetAvailablePath(data string, userpath string) 
 	return "/tmp", nil
 }
 
-func (fake FakeCfJavaPluginUtil) CopyOverCat(app string, src string, dest string) error {
+func (fake FakeCfJavaPluginUtil) CopyOverCat(args []string, src string, dest string) error {
 
 	if !fake.LocalPathValid {
 		return errors.New("Error occured during create desination file: " + dest + ", please check you are allowed to create file in the path.")
@@ -59,7 +59,7 @@ func (fake FakeCfJavaPluginUtil) CopyOverCat(app string, src string, dest string
 	return nil
 }
 
-func (fake FakeCfJavaPluginUtil) DeleteRemoteFile(app string, path string) error {
+func (fake FakeCfJavaPluginUtil) DeleteRemoteFile(args []string, path string) error {
 	if path != fake.Fspath+"/"+fake.OutputFileName {
 		return errors.New("error occured while removing dump file generated")
 
@@ -68,9 +68,9 @@ func (fake FakeCfJavaPluginUtil) DeleteRemoteFile(app string, path string) error
 	return nil
 }
 
-func (fake FakeCfJavaPluginUtil) FindDumpFile(app string, fullpath string, fspath string) (string, error) {
+func (fake FakeCfJavaPluginUtil) FindDumpFile(args []string, fullpath string, fspath string) (string, error) {
 
-	expectedFullPath := fake.Fspath + "/" + app + "-heapdump-" + fake.UUID + ".hprof"
+	expectedFullPath := fake.Fspath + "/" + args[1] + "-heapdump-" + fake.UUID + ".hprof"
 	if fspath != fake.Fspath || fullpath != expectedFullPath {
 		return "", errors.New("error while checking the generated file")
 	}
