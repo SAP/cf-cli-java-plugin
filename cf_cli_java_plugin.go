@@ -244,12 +244,13 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		return "cf " + strings.Join(cfSSHArguments, " "), nil
 	}
 
-	cfSSHArguments = append(cfSSHArguments, remoteCommand)
+	fullCommand := append(cfSSHArguments, remoteCommand)
 
-	output, err := commandExecutor.Execute(cfSSHArguments)
+	output, err := commandExecutor.Execute(fullCommand)
+
 	if command == heapDumpCommand {
 
-		finalFile, err := util.FindDumpFile(applicationName, heapdumpFileName, fspath)
+		finalFile, err := util.FindDumpFile(cfSSHArguments, heapdumpFileName, fspath)
 		if err == nil && finalFile != "" {
 			heapdumpFileName = finalFile
 			fmt.Println("Successfully created heap dump in application container at: " + heapdumpFileName)
@@ -263,7 +264,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 		if copyToLocal {
 			localFileFullPath := localDir + "/" + applicationName + "-heapdump-" + uuidGenerator.Generate() + ".hprof"
-			err = util.CopyOverCat(applicationName, heapdumpFileName, localFileFullPath)
+			err = util.CopyOverCat(cfSSHArguments, heapdumpFileName, localFileFullPath)
 			if err == nil {
 				fmt.Println("Heap dump file saved to: " + localFileFullPath)
 			} else {
@@ -274,7 +275,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		}
 
 		if !keepAfterDownload {
-			err = util.DeleteRemoteFile(applicationName, heapdumpFileName)
+			err = util.DeleteRemoteFile(cfSSHArguments, heapdumpFileName)
 			if err != nil {
 				return "", err
 			}
@@ -303,7 +304,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 		Version: plugin.VersionType{
 			Major: 3,
 			Minor: 0,
-			Build: 2,
+			Build: 3,
 		},
 		MinCliVersion: plugin.VersionType{
 			Major: 6,
