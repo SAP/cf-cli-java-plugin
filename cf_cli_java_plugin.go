@@ -103,6 +103,90 @@ func (c *JavaPlugin) DoRun(commandExecutor cmd.CommandExecutor, uuidGenerator uu
 	return output, err
 }
 
+type Command struct {
+	name	      string
+	description   string
+    generateFiles bool
+	// use $$FILENAME to get the generated file name and $$FSPATH to get the path where the file is stored
+    sshCommand    string
+    filePattern   string
+	fileExtension string
+	fileLabel     string
+	fileNamePart  string
+}
+
+// create a global variable to store the commands
+var commands = map[string]Command{
+	"heap-dump": {
+		name: "heap-dump",
+		description: "Generate a heap dump from a running Java application",
+		generateFiles: true,
+		fileExtension: ".hprof",
+		sshCommand: `if [ -f $$FILE_NAME ]; then echo >&2 'Heap dump $$FILE_NAME already exists'; exit 1; fi
+# If there is not enough space on the filesystem to write the dump, jmap will create a file
+# with size 0, output something about not enough space left on the device, and exit with status code 0.
+# Because YOLO.
+#
+# Also: if the heap dump file already exists, jmap will output something about the file already
+# existing and exit with status code 0. At least it is consistent.
+
+# OpenJDK: Wrap everything in an if statement in case jmap is available
+JMAP_COMMAND=$(find -executable -name jmap | head -1 | tr -d [:space:])
+# SAP JVM: Wrap everything in an if statement in case jvmmon is available
+JVMMON_COMMAND=$(find -executable -name jvmmon | head -1 | tr -d [:space:])
+if [ -n "${JMAP_COMMAND}" ]; then true
+OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=$$FILE_NAME $(pidof java) ) || STATUS_CODE=$?
+if [ ! -s $$FILE_NAME ]; then echo >&2 ${OUTPUT}; exit 1; fi
+if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi
+elif [ -n "${JVMMON_COMMAND}" ]; then true
+echo -e 'change command line flag flags=-XX:HeapDumpOnDemandPath=$$FSPATH\ndump heap' > setHeapDumpOnDemandPath.sh
+OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -cmd "setHeapDumpOnDemandPath.sh" ) || STATUS_CODE=$?
+sleep 5 # Writing the heap dump is triggered asynchronously -> give the JVM some time to create the file
+HEAP_DUMP_NAME=$(find $$FSPATH -name 'java_pid*.hprof' -printf '%T@ %p\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\0' '\n' | head -n 1)
+SIZE=-1; OLD_SIZE=$(stat -c '%s' "${HEAP_DUMP_NAME}"); while [ ${SIZE} != ${OLD_SIZE} ]; do OLD_SIZE=${SIZE}; sleep 3; SIZE=$(stat -c '%s' "${HEAP_DUMP_NAME}"); done
+if [ ! -s "${HEAP_DUMP_NAME}" ]; then echo >&2 ${OUTPUT}; exit 1; fi
+if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi
+fi`,
+		fileLabel: "heap dump",
+		fileNamePart: "heapdump",
+	},
+	"thread-dump": {
+		name: "thread-dump",
+		description: "Generate a thread dump from a running Java application",
+		generateFiles: false,
+		sshCommand: "JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi; # OpenJDK\n" +
+		"JVMMON_COMMAND=`find -executable -name jvmmon | head -1`; if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi #SAPJVM",
+	},
+	"start-jfr": {
+		name: "start-jfr",
+		description: "Start a Java Flight Recorder recording on a running Java application",
+		generateFiles: false,
+		sshCommand: `JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z "${JCMD_COMMAND}" ]; then echo >&2 "jcmd not found"; exit 1; fi
+		$JCMD_COMMAND $(pidof java) JFR.start $$ARGS; echo "Use 'cf java stop-jfr $$APP_NAME --local-dir .' to copy the file"`,
+	},
+	"stop-jfr": {
+		name: "stop-jfr",
+		description: "Stop a Java Flight Recorder recording on a running Java application",
+		generateFiles: true,
+		fileExtension: ".jfr",
+		fileLabel: "JFR recording",
+		fileNamePart: "jfr",
+		sshCommand: `JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z "${JCMD_COMMAND}" ]; then echo >&2 "jcmd not found"; exit 1; fi
+		$JCMD_COMMAND $(pidof java) JFR.dump filename=$$FILE_NAME $$ARGS; $JCMD_COMMAND $(pidof java) JFR.stop`,
+	},
+}
+
+func toSentenceCase(input string) string {
+	// Convert the first character to uppercase and the rest to lowercase
+	if len(input) == 0 {
+		return input
+	}
+
+	// Convert the first letter to uppercase
+	return strings.ToUpper(string(input[0])) + strings.ToLower(input[1:])
+}
+
+
 func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator uuid.UUIDGenerator, util utils.CfJavaPluginUtil, args []string) (string, error) {
 	if len(args) == 0 {
 		return "", &InvalidUsageError{message: "No command provided"}
@@ -125,10 +209,13 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	commandFlags := flags.New()
 
 	commandFlags.NewIntFlagWithDefault("app-instance-index", "i", "application `instance` to connect to", -1)
-	commandFlags.NewBoolFlag("keep", "k", "whether to `keep` the heap/thread-dump on the container of the application instance after having downloaded it locally")
+	commandFlags.NewBoolFlag("keep", "k", "whether to `keep` the heap-dump/JFR/... files on the container of the application instance after having downloaded it locally")
 	commandFlags.NewBoolFlag("dry-run", "n", "triggers the `dry-run` mode to show only the cf-ssh command that would have been executed")
 	commandFlags.NewStringFlag("container-dir", "cd", "specify the folder path where the dump file should be stored in the container")
 	commandFlags.NewStringFlag("local-dir", "ld", "specify the folder where the dump file will be downloaded to, dump file wil not be copied to local if this parameter  was not set")
+	commandFlags.NewStringFlag("args", "a", "additional `arguments` passed to the invoked command in the container")
+
+	fileFlags := []string{"container-dir", "local-dir", "keep"}
 
 	parseErr := commandFlags.Parse(args[1:]...)
 	if parseErr != nil {
@@ -150,22 +237,23 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		return "", &InvalidUsageError{message: fmt.Sprintf("No command provided")}
 	}
 
-	command := arguments[0]
-	switch command {
-	case heapDumpCommand:
-		break
-	case threadDumpCommand:
-		if commandFlags.IsSet("keep") {
-			return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for thread-dumps", "keep")}
+	commandName := arguments[0]
+	// if command name not in map, print error and available commands
+	if _, ok := commands[commandName]; !ok {
+		avCommands := make([]string, 0, len(commands))
+		for avCommand := range commands {
+			avCommands = append(avCommands, avCommand)
 		}
-		if commandFlags.IsSet("container-dir") {
-			return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for thread-dumps", "container-dir")}
+		return "", &InvalidUsageError{message: fmt.Sprintf("Unrecognized command %q: supported commands are %s' (see cf help)", commandName, strings.Join(avCommands, ", "))}
+	}
+
+	command := commands[commandName]
+	if !command.generateFiles {
+		for _, flag := range fileFlags {
+			if commandFlags.IsSet(flag) {
+				return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for %s", flag, commandName)}
+			}
 		}
-		if commandFlags.IsSet("local-dir") {
-			return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for thread-dumps", "local-dir")}
-		}
-	default:
-		return "", &InvalidUsageError{message: fmt.Sprintf("Unrecognized command %q: supported commands are 'heap-dump' and 'thread-dump' (see cf help)", command)}
 	}
 
 	if argumentLen == 1 {
@@ -181,58 +269,36 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		cfSSHArguments = append(cfSSHArguments, "--app-instance-index", strconv.Itoa(applicationInstance))
 	}
 
+	supported, err := util.CheckRequiredTools(applicationName)
+	if err != nil || !supported {
+		return "required tools checking failed", err
+	}
+
 	var remoteCommandTokens = []string{JavaDetectionCommand}
-	heapdumpFileName := ""
+	fileName := ""
 	fspath := remoteDir
-	switch command {
-	case heapDumpCommand:
 
-		supported, err := util.CheckRequiredTools(applicationName)
-		if err != nil || !supported {
-			return "required tools checking failed", err
-		}
+	var replacements = map[string]string{
+		"$$ARGS": commandFlags.String("args"),
+		"$$APP_NAME": applicationName,
+	}
 
+	if command.generateFiles {
 		fspath, err = util.GetAvailablePath(applicationName, remoteDir)
 		if err != nil {
 			return "", err
 		}
-		heapdumpFileName = fspath + "/" + applicationName + "-heapdump-" + uuidGenerator.Generate() + ".hprof"
 
-		remoteCommandTokens = append(remoteCommandTokens,
-			// Check file does not already exist
-			"if [ -f "+heapdumpFileName+" ]; then echo >&2 'Heap dump "+heapdumpFileName+" already exists'; exit 1; fi",
-			/*
-			 * If there is not enough space on the filesystem to write the dump, jmap will create a file
-			 * with size 0, output something about not enough space left on device and exit with status code 0.
-			 * Because YOLO.
-			 *
-			 * Also: if the heap dump file already exists, jmap will output something about the file already
-			 * existing and exit with status code 0. At least it is consistent.
-			 */
-			// OpenJDK: Wrap everything in an if statement in case jmap is available
-			"JMAP_COMMAND=`find -executable -name jmap | head -1 | tr -d [:space:]`",
-			// SAP JVM: Wrap everything in an if statement in case jvmmon is available
-			"JVMMON_COMMAND=`find -executable -name jvmmon | head -1 | tr -d [:space:]`",
-			"if [ -n \"${JMAP_COMMAND}\" ]; then true",
-			"OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file="+heapdumpFileName+" $(pidof java) ) || STATUS_CODE=$?",
-			"if [ ! -s "+heapdumpFileName+" ]; then echo >&2 ${OUTPUT}; exit 1; fi",
-			"if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi",
-			"elif [ -n \"${JVMMON_COMMAND}\" ]; then true",
-			"echo -e 'change command line flag flags=-XX:HeapDumpOnDemandPath="+fspath+"\ndump heap' > setHeapDumpOnDemandPath.sh",
-			"OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -cmd \"setHeapDumpOnDemandPath.sh\" ) || STATUS_CODE=$?",
-			"sleep 5", // Writing the heap dump is triggered asynchronously -> give the jvm some time to create the file
-			"HEAP_DUMP_NAME=`find "+fspath+" -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1`",
-			"SIZE=-1; OLD_SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); while [ ${SIZE} != ${OLD_SIZE} ]; do OLD_SIZE=${SIZE}; sleep 3; SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); done",
-			"if [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi",
-			"if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi",
-			"fi")
-
-	case threadDumpCommand:
-		// OpenJDK
-		remoteCommandTokens = append(remoteCommandTokens, "JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi")
-		// SAP JVM
-		remoteCommandTokens = append(remoteCommandTokens, "JVMMON_COMMAND=`find -executable -name jvmmon | head -1`; if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi")
+		fileName = fspath + "/" + applicationName + "-" + command.fileNamePart + "-" + uuidGenerator.Generate() + command.fileExtension
+		replacements["$$FILE_NAME"] = fileName
+		replacements["$$FSPATH"] = fspath
 	}
+
+	var commandText = command.sshCommand
+	for key, value := range replacements {
+		commandText = strings.ReplaceAll(commandText, key, value)
+	}
+	remoteCommandTokens = append(remoteCommandTokens, commandText)
 
 	cfSSHArguments = append(cfSSHArguments, "--command")
 	remoteCommand := strings.Join(remoteCommandTokens, "; ")
@@ -248,38 +314,47 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 	output, err := commandExecutor.Execute(fullCommand)
 
-	if command == heapDumpCommand {
+	if command.generateFiles {
 
-		finalFile, err := util.FindDumpFile(cfSSHArguments, heapdumpFileName, fspath)
+		finalFile := ""
+		var err error
+		switch command.fileExtension {
+		case ".hprof":
+			finalFile, err = util.FindHeapDumpFile(cfSSHArguments, fileName, fspath)
+		case ".jfr":
+			finalFile, err = util.FindJFRFile(cfSSHArguments, fileName, fspath)
+		default:
+			return "", &InvalidUsageError{message: fmt.Sprintf("Unsupported file extension %q", command.fileExtension)}
+		}
 		if err == nil && finalFile != "" {
-			heapdumpFileName = finalFile
-			fmt.Println("Successfully created heap dump in application container at: " + heapdumpFileName)
+			fileName = finalFile
+			fmt.Println("Successfully created " + command.fileLabel + " in application container at: " + fileName)
 		} else {
-			fmt.Println("Failed to find heap dump in application container")
+			fmt.Println("Failed to find " + command.fileLabel + " in application container")
 			fmt.Println(finalFile)
-			fmt.Println(heapdumpFileName)
+			fmt.Println(fileName)
 			fmt.Println(fspath)
 			return "", err
 		}
 
 		if copyToLocal {
-			localFileFullPath := localDir + "/" + applicationName + "-heapdump-" + uuidGenerator.Generate() + ".hprof"
-			err = util.CopyOverCat(cfSSHArguments, heapdumpFileName, localFileFullPath)
+			localFileFullPath := localDir + "/" + applicationName + "-" + command.fileNamePart + "-" + uuidGenerator.Generate() + command.fileExtension
+			err = util.CopyOverCat(cfSSHArguments, fileName, localFileFullPath)
 			if err == nil {
-				fmt.Println("Heap dump file saved to: " + localFileFullPath)
+				fmt.Println(toSentenceCase(command.fileLabel) + " file saved to: " + localFileFullPath)
 			} else {
 				return "", err
 			}
 		} else {
-			fmt.Println("Heap dump will not be copied as parameter `local-dir` was not set")
+			fmt.Println(toSentenceCase(command.fileLabel) + " will not be copied as parameter `local-dir` was not set")
 		}
 
 		if !keepAfterDownload {
-			err = util.DeleteRemoteFile(cfSSHArguments, heapdumpFileName)
+			err = util.DeleteRemoteFile(cfSSHArguments, fileName)
 			if err != nil {
 				return "", err
 			}
-			fmt.Println("Heap dump file deleted in app container")
+			fmt.Println(toSentenceCase(command.fileLabel) + " file deleted in app container")
 		}
 	}
 	// We keep this around to make the compiler happy, but commandExecutor.Execute will cause an os.Exit
@@ -299,6 +374,16 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 // second field, HelpText, is used by the core CLI to display help information
 // to the user in the core commands `cf help`, `cf`, or `cf -h`.
 func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
+	var commandNames = make([]string, 0, len(commands))
+	for commandName := range commands {
+		commandNames = append(commandNames, commandName)
+	}
+	// create a usage string by combining the descriptions from the commands
+	// with cf java [" + strings.Join(commandNames, "|") + "] APP_NAME
+	var usageText = "cf java [" + strings.Join(commandNames, "|") + "] APP_NAME"
+	for _, command := range commands {
+		usageText += "\n\n     " + command.name + "\n        " + command.description
+	}
 	return plugin.PluginMetadata{
 		Name: "java",
 		Version: plugin.VersionType{
@@ -314,18 +399,19 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 		Commands: []plugin.Command{
 			{
 				Name:     "java",
-				HelpText: "Obtain a heap-dump or thread-dump from a running, SSH-enabled Java application.",
+				HelpText: "Obtain a heap-dump, thread-dump or profile from a running, SSH-enabled Java application.",
 
 				// UsageDetails is optional
 				// It is used to show help of usage of each command
 				UsageDetails: plugin.Usage{
-					Usage: "cf java [" + heapDumpCommand + "|" + threadDumpCommand + "] APP_NAME",
+					Usage: usageText,
 					Options: map[string]string{
 						"app-instance-index": "-i [index], select to which instance of the app to connect",
-						"keep":               "-k, keep the heap dump in the container; by default the heap dump will be deleted from the container's filesystem after been downloaded",
+						"keep":               "-k, keep the heap dump in the container; by default the heap dump/... will be deleted from the container's filesystem after been downloaded",
 						"dry-run":            "-n, just output to command line what would be executed",
 						"container-dir":      "-cd, the directory path in the container that the heap dump file will be saved to",
 						"local-dir":          "-ld, the local directory path that the dump file will be saved to",
+						"args":               "-a, additional arguments passed to the invoked command in the container",
 					},
 				},
 			},

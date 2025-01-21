@@ -5,5 +5,7 @@ type CfJavaPluginUtil interface {
 	GetAvailablePath(data string, userpath string) (string, error)
 	CopyOverCat(args []string, src string, dest string) error
 	DeleteRemoteFile(args []string, path string) error
-	FindDumpFile(args []string, fullpath string, fspath string) (string, error)
+	FindHeapDumpFile(args []string, fullpath string, fspath string) (string, error)
+	FindJFRFile(args []string, fullpath string, fspath string) (string, error)
+	FindFile(args []string, fullpath string, fspath string, pattern string) (string, error)
 }

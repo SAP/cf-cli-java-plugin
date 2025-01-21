@@ -197,8 +197,16 @@ func (checker CfJavaPluginUtilImpl) DeleteRemoteFile(args []string, path string)
 	return nil
 }
 
-func (checker CfJavaPluginUtilImpl) FindDumpFile(args []string, fullpath string, fspath string) (string, error) {
-	cmd := " [ -f '" + fullpath + "' ] && echo '" + fullpath + "' ||  find " + fspath + " -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1  "
+func (checker CfJavaPluginUtilImpl) FindHeapDumpFile(args []string, fullpath string, fspath string) (string, error) {
+	return checker.FindFile(args, fullpath, fspath, "java_pid*.hprof")
+}
+
+func (checker CfJavaPluginUtilImpl) FindJFRFile(args []string, fullpath string, fspath string) (string, error) {
+	return checker.FindFile(args, fullpath, fspath, "*.jfr")
+}
+
+func (checker CfJavaPluginUtilImpl) FindFile(args []string, fullpath string, fspath string, pattern string) (string, error) {
+	cmd := " [ -f '" + fullpath + "' ] && echo '" + fullpath + "' ||  find " + fspath + " -name '" + pattern + "' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1 "
 
 	args = append(args, cmd)
 	output, err := exec.Command("cf", args...).Output()

@@ -62,20 +62,33 @@ func (fake FakeCfJavaPluginUtil) CopyOverCat(args []string, src string, dest str
 func (fake FakeCfJavaPluginUtil) DeleteRemoteFile(args []string, path string) error {
 	if path != fake.Fspath+"/"+fake.OutputFileName {
 		return errors.New("error occured while removing dump file generated")
-
 	}
 
 	return nil
 }
 
-func (fake FakeCfJavaPluginUtil) FindDumpFile(args []string, fullpath string, fspath string) (string, error) {
-
-	expectedFullPath := fake.Fspath + "/" + args[1] + "-heapdump-" + fake.UUID + ".hprof"
+func (fake FakeCfJavaPluginUtil) FindFakeFile(args []string, fullpath string, fspath string, expectedFullPath string) (string, error) {
 	if fspath != fake.Fspath || fullpath != expectedFullPath {
 		return "", errors.New("error while checking the generated file")
 	}
 	output := fspath + "/" + fake.OutputFileName
 
 	return strings.Trim(string(output[:]), "\n"), nil
+}
 
+func (fake FakeCfJavaPluginUtil) FindHeapDumpFile(args []string, fullpath string, fspath string) (string, error) {
+
+	expectedFullPath := fake.Fspath + "/" + args[1] + "-heapdump-" + fake.UUID + ".hprof"
+	return fake.FindFakeFile(args, fullpath, fspath, expectedFullPath)
+}
+
+func (fake FakeCfJavaPluginUtil) FindJFRFile(args []string, fullpath string, fspath string) (string, error) {
+
+	expectedFullPath := fake.Fspath + "/" + args[1] + "-profile-" + fake.UUID + ".jfr"
+	return fake.FindFakeFile(args, fullpath, fspath, expectedFullPath)
+}
+
+
+func (fake FakeCfJavaPluginUtil) FindFile(args []string, fullpath string, fspath string, pattern string) (string, error) {
+	return fake.FindHeapDumpFile(args, fullpath, fspath) // same as FindHeapDumpFile, just to avoid duplication
 }
