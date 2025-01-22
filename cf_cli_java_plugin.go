@@ -106,6 +106,7 @@ func (c *JavaPlugin) DoRun(commandExecutor cmd.CommandExecutor, uuidGenerator uu
 type Command struct {
 	name	      string
 	description   string
+	requiredTools []string
     generateFiles bool
 	// use $$FILENAME to get the generated file name and $$FSPATH to get the path where the file is stored
     sshCommand    string
@@ -157,22 +158,57 @@ fi`,
 		sshCommand: "JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi; # OpenJDK\n" +
 		"JVMMON_COMMAND=`find -executable -name jvmmon | head -1`; if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi #SAPJVM",
 	},
+	"vm-info": {
+		name: "vm-info",
+		description: "Print information about the Java Virtual Machine running a Java application",
+		requiredTools: []string{"jcmd"},
+		generateFiles: false,
+		sshCommand: `$JCMD_COMMAND $(pidof java) VM.info`,
+	},
+	"jcmd": {
+		name: "jcmd",
+		description: "Run a JCMD command on a running Java application, by passing it via the 'args' parameter",
+		requiredTools: []string{"jcmd"},
+		generateFiles: false,
+		sshCommand: `$JCMD_COMMAND $(pidof java) $$ARGS`,
+	},
 	"start-jfr": {
 		name: "start-jfr",
 		description: "Start a Java Flight Recorder recording on a running Java application",
+		requiredTools: []string{"jcmd"},
 		generateFiles: false,
-		sshCommand: `JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z "${JCMD_COMMAND}" ]; then echo >&2 "jcmd not found"; exit 1; fi
-		$JCMD_COMMAND $(pidof java) JFR.start $$ARGS; echo "Use 'cf java stop-jfr $$APP_NAME --local-dir .' to copy the file"`,
+		sshCommand: `$JCMD_COMMAND $(pidof java) JFR.start $$ARGS; echo "Use 'cf java stop-jfr $$APP_NAME --local-dir .' to copy the file"`,
 	},
 	"stop-jfr": {
 		name: "stop-jfr",
 		description: "Stop a Java Flight Recorder recording on a running Java application",
+		requiredTools: []string{"jcmd"},
 		generateFiles: true,
 		fileExtension: ".jfr",
 		fileLabel: "JFR recording",
 		fileNamePart: "jfr",
-		sshCommand: `JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z "${JCMD_COMMAND}" ]; then echo >&2 "jcmd not found"; exit 1; fi
-		$JCMD_COMMAND $(pidof java) JFR.dump filename=$$FILE_NAME $$ARGS; $JCMD_COMMAND $(pidof java) JFR.stop`,
+		sshCommand: `$JCMD_COMMAND $(pidof java) JFR.dump filename=$$FILE_NAME $$ARGS; $JCMD_COMMAND $(pidof java) JFR.stop`,
+	},
+	"vm-version": {
+		name: "vm-version",
+		description: "Print the version of the Java Virtual Machine running a Java application",
+		requiredTools: []string{"jcmd"},
+		generateFiles: false,
+		sshCommand: `$JCMD_COMMAND $(pidof java) VM.version`,
+	},
+	"vitals": {
+		name: "vitals",
+		description: "Print vital statistics about the Java Virtual Machine running a Java application",
+		requiredTools: []string{"jcmd"},
+		generateFiles: false,
+		sshCommand: `$JCMD_COMMAND $(pidof java) GC.class_stats; $JCMD_COMMAND $(pidof java) GC.heap_info; $JCMD_COMMAND $(pidof java) GC.run`,
+	},
+	"asprof": {
+		name: "asprof",
+		description: "Run async-profiler commands passed to asprof via --args",
+		requiredTools: []string{"asprof"},
+		generateFiles: false,
+		sshCommand: `$ASPROF_COMMAND $(pidof java) $$ARGS`,
 	},
 }
 
@@ -275,6 +311,11 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	}
 
 	var remoteCommandTokens = []string{JavaDetectionCommand}
+
+	for _, requiredTool := range command.requiredTools {
+		uppercase := strings.ToUpper(requiredTool)
+		remoteCommandTokens = append(remoteCommandTokens, fmt.Sprintf("%s_COMMAND=$(find -executable -name %s | head -1 | tr -d [:space:]); if [ -z \"${%s_COMMAND}\" ]; then echo > \"%s not found\"; exit 1; fi", uppercase, requiredTool, uppercase, requiredTool))
+	}
 	fileName := ""
 	fspath := remoteDir
 
