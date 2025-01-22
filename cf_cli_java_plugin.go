@@ -59,8 +59,6 @@ func (u uuidGeneratorImpl) Generate() string {
 const (
 	// JavaDetectionCommand is the prologue command to detect on the Garden container if it contains a Java app. Visible for tests
 	JavaDetectionCommand = "if ! pgrep -x \"java\" > /dev/null; then echo \"No 'java' process found running. Are you sure this is a Java app?\" >&2; exit 1; fi"
-	heapDumpCommand      = "heap-dump"
-	threadDumpCommand    = "thread-dump"
 )
 
 // Run must be implemented by any plugin because it is part of the
@@ -168,21 +166,21 @@ fi`,
 	},
 	"jcmd": {
 		name: "jcmd",
-		description: "Run a JCMD command on a running Java application via CF_JAVA_ARGS",
+		description: "Run a JCMD command on a running Java application via --args",
 		requiredTools: []string{"jcmd"},
 		generateFiles: false,
 		sshCommand: `$JCMD_COMMAND $(pidof java) $$ARGS`,
 	},
 	"start-jfr": {
 		name: "start-jfr",
-		description: "Start a Java Flight Recorder recording on a running Java application (additional options via CF_JAVA_ARGS)",
+		description: "Start a Java Flight Recorder recording on a running Java application (additional options via --args)",
 		requiredTools: []string{"jcmd"},
 		generateFiles: false,
 		sshCommand: `$JCMD_COMMAND $(pidof java) JFR.start $$ARGS; echo "Use 'cf java stop-jfr $$APP_NAME --local-dir .' to copy the file"`,
 	},
 	"stop-jfr": {
 		name: "stop-jfr",
-		description: "Stop a Java Flight Recorder recording on a running Java application (additional options via CF_JAVA_ARGS)",
+		description: "Stop a Java Flight Recorder recording on a running Java application (additional options via --args)",
 		requiredTools: []string{"jcmd"},
 		generateFiles: true,
 		fileExtension: ".jfr",
@@ -206,14 +204,14 @@ fi`,
 	},
 	"asprof": {
 		name: "asprof",
-		description: "Run async-profiler commands passed to asprof via CF_JAVA_ARGS",
+		description: "Run async-profiler commands passed to asprof via --args",
 		requiredTools: []string{"asprof"},
 		generateFiles: false,
 		sshCommand: `$ASPROF_COMMAND $$ARGS`,
 	},
 	"start-asprof": {
 		name: "start-asprof",
-		description: "Start async-profiler profiling on a running Java application (additional options via CF_JAVA_ARGS)",
+		description: "Start async-profiler profiling on a running Java application (additional options via --args)",
 		requiredTools: []string{"asprof"},
 		generateFiles: false,
 		needsFileName: true,
@@ -224,7 +222,7 @@ fi`,
 	},
 	"start-asprof-cpu-profile": {
 		name: "start-asprof-cpu-profile",
-		description: "Start async-profiler CPU profiling on a running Java application (additional options via CF_JAVA_ARGS)",
+		description: "Start async-profiler CPU profiling on a running Java application (additional options via --args)",
 		requiredTools: []string{"asprof"},
 		generateFiles: false,
 		needsFileName: true,
@@ -234,7 +232,7 @@ fi`,
 	},
 	"start-asprof-wall-clock-profile": {
 		name: "start-asprof-wall-clock-profile",
-		description: "Start async-profiler wall-clock profiling on a running Java application (additional options via CF_JAVA_ARGS)",
+		description: "Start async-profiler wall-clock profiling on a running Java application (additional options via --args)",
 		requiredTools: []string{"asprof"},
 		generateFiles: false,
 		needsFileName: true,
@@ -244,7 +242,7 @@ fi`,
 	},
 	"stop-asprof": {
 		name: "stop-asprof",
-		description: "Stop async-profiler profiling on a running Java application (additional options via CF_JAVA_ARGS)",
+		description: "Stop async-profiler profiling on a running Java application (additional options via --args)",
 		requiredTools: []string{"asprof"},
 		generateFiles: true,
 		fileExtension: ".jfr",
@@ -291,8 +289,13 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	commandFlags.NewBoolFlag("dry-run", "n", "triggers the `dry-run` mode to show only the cf-ssh command that would have been executed")
 	commandFlags.NewStringFlag("container-dir", "cd", "specify the folder path where the dump file should be stored in the container")
 	commandFlags.NewStringFlag("local-dir", "ld", "specify the folder where the dump file will be downloaded to, dump file wil not be copied to local if this parameter  was not set")
+	commandFlags.NewStringFlag("args", "a", "Miscellaneous arguments to pass to the command in the container, be aware to end it with a space if it is a simple option")
 
-	ARGS_ENV_VAR := os.Getenv("CF_JAVA_ARGS")
+	miscArgs := ""
+
+	if commandFlags.IsSet("args") {
+		miscArgs = commandFlags.String("args")
+	}
 
 	fileFlags := []string{"container-dir", "local-dir", "keep"}
 
@@ -363,7 +366,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	fspath := remoteDir
 
 	var replacements = map[string]string{
-		"$$ARGS": ARGS_ENV_VAR,
+		"$$ARGS": miscArgs,
 		"$$APP_NAME": applicationName,
 	}
 
@@ -468,8 +471,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 	for _, command := range commands {
 		usageText += "\n\n     " + command.name + "\n        " + command.description
 	}
-	usageText += "\n\n  Environment Variables\n\n     CF_JAVA_ARGS\n        Arguments to pass to the Java command"
-	return plugin.PluginMetadata{
+    return plugin.PluginMetadata{
 		Name: "java",
 		Version: plugin.VersionType{
 			Major: 3,
@@ -496,6 +498,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 						"dry-run":            "-n, just output to command line what would be executed",
 						"container-dir":      "-cd, the directory path in the container that the heap dump file will be saved to",
 						"local-dir":          "-ld, the local directory path that the dump file will be saved to",
+						"args":               "Miscellaneous arguments to pass to the command in the container, be aware to end it with a space if it is a simple option",
 					},
 				},
 			},
