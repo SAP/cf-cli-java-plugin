@@ -108,6 +108,7 @@ type Command struct {
 	description   string
 	requiredTools []string
     generateFiles bool
+	needsFileName bool
 	// use $$FILENAME to get the generated file name and $$FSPATH to get the path where the file is stored
     sshCommand    string
     filePattern   string
@@ -167,21 +168,21 @@ fi`,
 	},
 	"jcmd": {
 		name: "jcmd",
-		description: "Run a JCMD command on a running Java application, by passing it via the 'args' parameter",
+		description: "Run a JCMD command on a running Java application via CF_JAVA_ARGS",
 		requiredTools: []string{"jcmd"},
 		generateFiles: false,
 		sshCommand: `$JCMD_COMMAND $(pidof java) $$ARGS`,
 	},
 	"start-jfr": {
 		name: "start-jfr",
-		description: "Start a Java Flight Recorder recording on a running Java application",
+		description: "Start a Java Flight Recorder recording on a running Java application (additional options via CF_JAVA_ARGS)",
 		requiredTools: []string{"jcmd"},
 		generateFiles: false,
 		sshCommand: `$JCMD_COMMAND $(pidof java) JFR.start $$ARGS; echo "Use 'cf java stop-jfr $$APP_NAME --local-dir .' to copy the file"`,
 	},
 	"stop-jfr": {
 		name: "stop-jfr",
-		description: "Stop a Java Flight Recorder recording on a running Java application",
+		description: "Stop a Java Flight Recorder recording on a running Java application (additional options via CF_JAVA_ARGS)",
 		requiredTools: []string{"jcmd"},
 		generateFiles: true,
 		fileExtension: ".jfr",
@@ -205,10 +206,51 @@ fi`,
 	},
 	"asprof": {
 		name: "asprof",
-		description: "Run async-profiler commands passed to asprof via --args",
+		description: "Run async-profiler commands passed to asprof via CF_JAVA_ARGS",
 		requiredTools: []string{"asprof"},
 		generateFiles: false,
-		sshCommand: `$ASPROF_COMMAND $(pidof java) $$ARGS`,
+		sshCommand: `$ASPROF_COMMAND $$ARGS`,
+	},
+	"start-asprof": {
+		name: "start-asprof",
+		description: "Start async-profiler profiling on a running Java application (additional options via CF_JAVA_ARGS)",
+		requiredTools: []string{"asprof"},
+		generateFiles: false,
+		needsFileName: true,
+		fileExtension: ".jfr",
+		fileNamePart: "asprof",
+		sshCommand: `$ASPROF_COMMAND start $(pidof java) $$ARGS -f $$FILE_NAME`,
+
+	},
+	"start-asprof-cpu-profile": {
+		name: "start-asprof-cpu-profile",
+		description: "Start async-profiler CPU profiling on a running Java application (additional options via CF_JAVA_ARGS)",
+		requiredTools: []string{"asprof"},
+		generateFiles: false,
+		needsFileName: true,
+		fileExtension: ".jfr",
+		fileNamePart: "asprof",
+		sshCommand: `$ASPROF_COMMAND start $$ARGS -f $$FILE_NAME -e ctimer $(pidof java)`,
+	},
+	"start-asprof-wall-clock-profile": {
+		name: "start-asprof-wall-clock-profile",
+		description: "Start async-profiler wall-clock profiling on a running Java application (additional options via CF_JAVA_ARGS)",
+		requiredTools: []string{"asprof"},
+		generateFiles: false,
+		needsFileName: true,
+		fileExtension: ".jfr",
+		fileNamePart: "asprof",
+		sshCommand: `$ASPROF_COMMAND start $$ARGS -f $$FILE_NAME -e wall $(pidof java)`,
+	},
+	"stop-asprof": {
+		name: "stop-asprof",
+		description: "Stop async-profiler profiling on a running Java application (additional options via CF_JAVA_ARGS)",
+		requiredTools: []string{"asprof"},
+		generateFiles: true,
+		fileExtension: ".jfr",
+		fileLabel: "JFR recording",
+		fileNamePart: "asprof",
+		sshCommand: `$ASPROF_COMMAND stop $$ARGS $(pidof java)`,
 	},
 }
 
@@ -249,7 +291,8 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	commandFlags.NewBoolFlag("dry-run", "n", "triggers the `dry-run` mode to show only the cf-ssh command that would have been executed")
 	commandFlags.NewStringFlag("container-dir", "cd", "specify the folder path where the dump file should be stored in the container")
 	commandFlags.NewStringFlag("local-dir", "ld", "specify the folder where the dump file will be downloaded to, dump file wil not be copied to local if this parameter  was not set")
-	commandFlags.NewStringFlag("args", "a", "additional `arguments` passed to the invoked command in the container")
+
+	ARGS_ENV_VAR := os.Getenv("CF_JAVA_ARGS")
 
 	fileFlags := []string{"container-dir", "local-dir", "keep"}
 
@@ -320,11 +363,11 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	fspath := remoteDir
 
 	var replacements = map[string]string{
-		"$$ARGS": commandFlags.String("args"),
+		"$$ARGS": ARGS_ENV_VAR,
 		"$$APP_NAME": applicationName,
 	}
 
-	if command.generateFiles {
+	if command.generateFiles || command.needsFileName {
 		fspath, err = util.GetAvailablePath(applicationName, remoteDir)
 		if err != nil {
 			return "", err
@@ -425,6 +468,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 	for _, command := range commands {
 		usageText += "\n\n     " + command.name + "\n        " + command.description
 	}
+	usageText += "\n\n  Environment Variables\n\n     CF_JAVA_ARGS\n        Arguments to pass to the Java command"
 	return plugin.PluginMetadata{
 		Name: "java",
 		Version: plugin.VersionType{
@@ -452,7 +496,6 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 						"dry-run":            "-n, just output to command line what would be executed",
 						"container-dir":      "-cd, the directory path in the container that the heap dump file will be saved to",
 						"local-dir":          "-ld, the local directory path that the dump file will be saved to",
-						"args":               "-a, additional arguments passed to the invoked command in the container",
 					},
 				},
 			},
