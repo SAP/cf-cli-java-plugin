@@ -5,8 +5,9 @@
 This plugin for the [Cloud Foundry Command Line](https://github.com/cloudfoundry/cli) provides convenience utilities to work with Java applications deployed on Cloud Foundry.
 
 Currently, it allows to:
-* Trigger and retrieve a heap dump from an instance of a Cloud Foundry Java application
-* Trigger and retrieve a thread dump from an instance of a Cloud Foundry Java application
+* Trigger and retrieve a heap dump and a thread dump from an instance of a Cloud Foundry Java application
+* To run jcmd remotely on your application
+* To start, stop and retrieve JFR and async-profiler profiles from your application
 
 ## Installation
 
@@ -78,46 +79,88 @@ If it fails, the issue is not in `cf java`, but in whatever makes `cf ssh` fail.
 ### Commands
 <pre>
 NAME:
-   java - Obtain a heap dump or thread dump from a running, SSH-enabled Java application
+   java - Obtain a heap-dump, thread-dump or profile from a running, SSH-enabled Java application.
 
 USAGE:
-   cf java [heap-dump|thread-dump] APP_NAME
+   cf java COMMAND APP_NAME [options]
+
+     heap-dump
+        Generate a heap dump from a running Java application
+
+     thread-dump
+        Generate a thread dump from a running Java application
+
+     vm-info
+        Print information about the Java Virtual Machine running a Java application
+
+     jcmd
+        Run a JCMD command on a running Java application via --args
+
+     start-jfr
+        Start a Java Flight Recorder recording on a running Java application (additional options via --args)
+
+     stop-jfr
+        Stop a Java Flight Recorder recording on a running Java application (additional options via --args)
+
+     vm-version
+        Print the version of the Java Virtual Machine running a Java application
+
+     vitals
+        Print vital statistics about the Java Virtual Machine running a Java application
+
+     asprof (recent SapMachine only)
+        Run async-profiler commands passed to asprof via --args
+
+     start-asprof (recent SapMachine only)
+        Start async-profiler profiling on a running Java application (additional options via --args)
+
+     start-asprof-cpu-profile (recent SapMachine only)
+        Start async-profiler CPU profiling on a running Java application (additional options via --args)
+
+     start-asprof-wall-clock-profile (recent SapMachine only)
+        Start async-profiler wall-clock profiling on a running Java application (additional options via --args)
+
+     stop-asprof
+        Stop async-profiler profiling on a running Java application (additional options via --args)
 
 OPTIONS:
    -app-instance-index       -i [index], select to which instance of the app to connect
-   -dry-run                  -n, just output to command line what would be executed
-   -keep                     -k, keep the heap dump in the container; by default the heap dump will be deleted from the container's filesystem after been downloaded
+   -args                     Miscellaneous arguments to pass to the command in the container, be aware to end it with a space if it is a simple option
    -container-dir            -cd, the directory path in the container that the heap dump file will be saved to
+   -dry-run                  -n, just output to command line what would be executed
+   -keep                     -k, keep the heap dump in the container; by default the heap dump/... will be deleted from the container's filesystem after been downloaded
    -local-dir                -ld, the local directory path that the dump file will be saved to
 </pre>
 
-The heap dump will be copied to a local file if `-local-dir` is specified as a full folder path. Without providing `-local-dir` the heap dump will only be created in the container and not transferred.
-To save disk space of the application container, heap dumps are automatically deleted unless the `-keep` option is set.
+The heap dumps and profiles will be copied to a local file if `-local-dir` is specified as a full folder path. Without providing `-local-dir` the heap dump will only be created in the container and not transferred.
+To save disk space of the application container, the files are automatically deleted unless the `-keep` option is set.
 
-Providing `-container-dir` is optional. If specified the plugin will create the heap dump at the given file path in the application container. Without providing this parameter, the heap dump will be created either at `/tmp` or at the file path of a file system service if attached to the container.
+Providing `-container-dir` is optional. If specified the plugin will create the heap dump or profile at the given file path in the application container. Without providing this parameter, the file will be created either at `/tmp` or at the file path of a file system service if attached to the container.
 
 ```shell
-cf java heap-dump [my-app] -local-dir /local/path [-container-dir /var/fspath]
+cf java [heap-dump|stop-jfr|stop-asprof] [my-app] -local-dir /local/path [-container-dir /var/fspath]
 ```
 
-The thread dump will be outputted to `std-out`.
+Everything else, like thread dumps, will be outputted to `std-out`.
 You may want to redirect the command's output to file, e.g., by executing:
 
 ```shell
 cf java thread-dump [my_app] -i [my_instance_index] > heap-dump.hprof
 ```
 
-The `-k` flag is invalid when invoking `cf java thread-dump`.
+The `-k` flag is invalid when invoking non file producing commands.
 (Unlike with heap dumps, the JVM does not need to output the thread dump to file before streaming it out.)
 
 ## Limitations
 
-The capability of creating heap dumps is also limited by the filesystem available to the container.
+The capability of creating heap dumps and profiles is also limited by the filesystem available to the container.
 The `cf java heap-dump` command triggers the heap dump to file system, read the content of the file over the SSH connection, and then remove the heap dump file from the container's file system (unless you have the `-k` flag set).
 The amount of filesystem space available to a container is set for the entire Cloud Foundry landscape with a global configuration.
 The size of a heap dump is roughly linear with the allocated memory of the heap.
 So, it could be that, in case of large heaps or the filesystem having too much stuff in it, there is not enough space on the filesystem for creating the heap dump.
 In that case, the creation of the heap dump and thus the command will fail.
+The same is true for stopping and thereby retrieving
+profiles.
 
 From the perspective of integration in workflows and overall shell-friendliness, the `cf java` plugin suffers from some shortcomings in the current `cf-cli` plugin framework:
 * There is no distinction between `stdout` and `stderr` output from the underlying `cf ssh` command (see [this issue on the `cf-cli` project](https://github.com/cloudfoundry/cli/issues/1074))
@@ -137,6 +180,9 @@ How much time is needed to execute the heap dump, depends on the size of the hea
 Since Cloud Foundry allows for over-commit in its cells, it is possible that a container would begin swapping when executing a full garbage collection.
 (To be fair, it could be swapping even *before* the garbage collection begins, but let's not knit-pick here.)
 So, it is theoretically possible that execuing a heap dump on a JVM in poor status of health will make it go even worse.
+
+Profiles might cause overhead depending on the configuration, but the default configurations
+typically have a limited overhead.
 
 Secondly, as the JVMs output heap dumps to the filesystem, creating a heap dump may lead to to not enough space on the filesystem been available for other tasks (e.g., temp files).
 In that case, the application in the container may suffer unexpected errors.
