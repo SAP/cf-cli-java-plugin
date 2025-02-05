@@ -298,17 +298,16 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	commandFlags.NewStringFlag("local-dir", "ld", "specify the folder where the dump file will be downloaded to, dump file wil not be copied to local if this parameter  was not set")
 	commandFlags.NewStringFlag("args", "a", "Miscellaneous arguments to pass to the command in the container, be aware to end it with a space if it is a simple option")
 
-	miscArgs := ""
-
-	if commandFlags.IsSet("args") {
-		miscArgs = commandFlags.String("args")
-	}
-
 	fileFlags := []string{"container-dir", "local-dir", "keep"}
 
 	parseErr := commandFlags.Parse(args[1:]...)
 	if parseErr != nil {
 		return "", &InvalidUsageError{message: fmt.Sprintf("Error while parsing command arguments: %v", parseErr)}
+	}
+
+	miscArgs := ""
+	if commandFlags.IsSet("args") {
+		miscArgs = commandFlags.String("args")
 	}
 
 	applicationInstance := commandFlags.Int("app-instance-index")
@@ -510,7 +509,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 						"dry-run":            "-n, just output to command line what would be executed",
 						"container-dir":      "-cd, the directory path in the container that the heap dump file will be saved to",
 						"local-dir":          "-ld, the local directory path that the dump file will be saved to",
-						"args":               "Miscellaneous arguments to pass to the command in the container, be aware to end it with a space if it is a simple option",
+						"args":               "-a, Miscellaneous arguments to pass to the command in the container, be aware to end it with a space if it is a simple option",
 					},
 				},
 			},

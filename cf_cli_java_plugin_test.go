@@ -10,6 +10,7 @@ import (
 	. "github.com/SAP/cf-cli-java-plugin/uuid/fakes"
 
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 )
 
@@ -453,6 +454,166 @@ fi'`, "UUUID", pluginUtil.UUID)
 
 		})
 
+		Context("when invoked to generate a jcmd", func() {
+
+			Context("without application name", func() {
+
+				It("outputs an error and does not invoke cf ssh", func() {
+
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd"})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err.Error()).To(ContainSubstring("No application name provided"))
+					Expect(cliOutput).To(ContainSubstring("No application name provided"))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"help", "java"}))
+				})
+
+			})
+
+			Context("with too many arguments", func() {
+
+				It("outputs an error and does not invoke cf ssh", func() {
+
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd", "my_app", "my_file", "ciao"})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err.Error()).To(ContainSubstring("Too many arguments provided: my_file, ciao"))
+					Expect(cliOutput).To(ContainSubstring("Too many arguments provided: my_file, ciao"))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"help", "java"}))
+				})
+
+			})
+
+			Context("with just the app name", func() {
+
+				It("invokes cf ssh with the basic commands", func() {
+
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd", "my_app"})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err).To(BeNil())
+					Expect(cliOutput).To(Equal(""))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--command", JavaDetectionCommand + "; " +
+						"JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z \"${JCMD_COMMAND}\" ]; " +
+						"then echo > \"jcmd not found\"; exit 1; fi; $JCMD_COMMAND $(pidof java) "}))
+				})
+
+			})
+
+			Context("with --args", func() {
+
+				It("invokes cf ssh with the basic commands", func() {
+
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd", "my_app", "--args", "bla blub"})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err).To(BeNil())
+					Expect(cliOutput).To(Equal(""))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--command", JavaDetectionCommand + "; " +
+						"JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z \"${JCMD_COMMAND}\" ]; " +
+						"then echo > \"jcmd not found\"; exit 1; fi; $JCMD_COMMAND $(pidof java) bla blub"}))
+				})
+				DescribeTable("don't escape quotation marks", func(args string, expectedEnd string) {
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd", "my_app", "--args", args})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err).To(BeNil())
+					Expect(cliOutput).To(Equal(""))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--command", JavaDetectionCommand + "; " +
+						"JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z \"${JCMD_COMMAND}\" ]; then echo > \"jcmd not found\"; exit 1; fi; $JCMD_COMMAND $(pidof java) " + expectedEnd}))
+				},
+					Entry("basic", "bla blub", "bla blub"),
+					Entry("with quotes", "bla ' \" 'blub", "bla ' \" 'blub"),
+					Entry("with newlines", "bla\nblub", "bla\nblub"),
+				)
+			})
+
+			Context("for a container with index > 0", func() {
+
+				It("invokes cf ssh with the basic commands", func() {
+
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd", "my_app", "-i", "4"})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err).To(BeNil())
+					Expect(cliOutput).To(Equal(""))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--app-instance-index", "4", "--command", JavaDetectionCommand + "; " +
+						"JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z \"${JCMD_COMMAND}\" ]; then echo > \"jcmd not found\"; exit 1; fi; $JCMD_COMMAND $(pidof java) "}))
+				})
+
+			})
+
+			Context("with the --keep flag", func() {
+
+				It("fails", func() {
+
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd", "my_app", "-i", "4", "-k"})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err.Error()).To(ContainSubstring("The flag \"keep\" is not supported for jcmd"))
+					Expect(cliOutput).To(ContainSubstring("The flag \"keep\" is not supported for jcmd"))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"help", "java"}))
+				})
+
+			})
+
+			Context("with the --dry-run flag", func() {
+
+				It("prints out the command line without executing the command", func() {
+
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd", "my_app", "-i", "4", "-n"})
+						return output, err
+					})
+
+					expectedOutput := "cf ssh my_app --app-instance-index 4 --command '" + JavaDetectionCommand + "; " +
+						"JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z \"${JCMD_COMMAND}\" ]; then echo > \"jcmd not found\"; exit 1; fi; $JCMD_COMMAND $(pidof java) '"
+
+					Expect(output).To(Equal(expectedOutput))
+					Expect(err).To(BeNil())
+					Expect(cliOutput).To(ContainSubstring(expectedOutput))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(0))
+				})
+
+			})
+
+		})
 	})
 
 })
