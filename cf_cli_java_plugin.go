@@ -102,14 +102,15 @@ func (c *JavaPlugin) DoRun(commandExecutor cmd.CommandExecutor, uuidGenerator uu
 }
 
 type Command struct {
-	name	      string
-	description   string
-	requiredTools []string
-    generateFiles bool
-	needsFileName bool
+	name                   string
+	description            string
+	onlyOnRecentSapMachine bool
+	requiredTools          []string
+	generateFiles          bool
+	needsFileName          bool
 	// use $$FILENAME to get the generated file name and $$FSPATH to get the path where the file is stored
-    sshCommand    string
-    filePattern   string
+	sshCommand    string
+	filePattern   string
 	fileExtension string
 	fileLabel     string
 	fileNamePart  string
@@ -118,19 +119,21 @@ type Command struct {
 // create a global variable to store the commands
 var commands = map[string]Command{
 	"heap-dump": {
-		name: "heap-dump",
-		description: "Generate a heap dump from a running Java application",
+		name:          "heap-dump",
+		description:   "Generate a heap dump from a running Java application",
 		generateFiles: true,
 		fileExtension: ".hprof",
-		sshCommand: `if [ -f $$FILE_NAME ]; then echo >&2 'Heap dump $$FILE_NAME already exists'; exit 1; fi
-# If there is not enough space on the filesystem to write the dump, jmap will create a file
-# with size 0, output something about not enough space left on the device, and exit with status code 0.
-# Because YOLO.
-#
-# Also: if the heap dump file already exists, jmap will output something about the file already
-# existing and exit with status code 0. At least it is consistent.
+		/*
+				If there is not enough space on the filesystem to write the dump, jmap will create a file
+		with size 0, output something about not enough space left on the device, and exit with status code 0.
+		Because YOLO.
 
-# OpenJDK: Wrap everything in an if statement in case jmap is available
+		Also: if the heap dump file already exists, jmap will output something about the file already
+		existing and exit with status code 0. At least it is consistent.
+
+		OpenJDK: Wrap everything in an if statement in case jmap is available
+		*/
+		sshCommand: `if [ -f $$FILE_NAME ]; then echo >&2 'Heap dump $$FILE_NAME already exists'; exit 1; fi
 JMAP_COMMAND=$(find -executable -name jmap | head -1 | tr -d [:space:])
 # SAP JVM: Wrap everything in an if statement in case jvmmon is available
 JVMMON_COMMAND=$(find -executable -name jvmmon | head -1 | tr -d [:space:])
@@ -147,108 +150,111 @@ SIZE=-1; OLD_SIZE=$(stat -c '%s' "${HEAP_DUMP_NAME}"); while [ ${SIZE} != ${OLD_
 if [ ! -s "${HEAP_DUMP_NAME}" ]; then echo >&2 ${OUTPUT}; exit 1; fi
 if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi
 fi`,
-		fileLabel: "heap dump",
+		fileLabel:    "heap dump",
 		fileNamePart: "heapdump",
 	},
 	"thread-dump": {
-		name: "thread-dump",
-		description: "Generate a thread dump from a running Java application",
+		name:          "thread-dump",
+		description:   "Generate a thread dump from a running Java application",
 		generateFiles: false,
-		sshCommand: "JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi; # OpenJDK\n" +
-		"JVMMON_COMMAND=`find -executable -name jvmmon | head -1`; if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi #SAPJVM",
+		sshCommand: "JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi; " +
+			"JVMMON_COMMAND=`find -executable -name jvmmon | head -1`; if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi",
 	},
 	"vm-info": {
-		name: "vm-info",
-		description: "Print information about the Java Virtual Machine running a Java application",
+		name:          "vm-info",
+		description:   "Print information about the Java Virtual Machine running a Java application",
 		requiredTools: []string{"jcmd"},
 		generateFiles: false,
-		sshCommand: `$JCMD_COMMAND $(pidof java) VM.info`,
+		sshCommand:    `$JCMD_COMMAND $(pidof java) VM.info`,
 	},
 	"jcmd": {
-		name: "jcmd",
-		description: "Run a JCMD command on a running Java application via --args",
+		name:          "jcmd",
+		description:   "Run a JCMD command on a running Java application via --args",
 		requiredTools: []string{"jcmd"},
 		generateFiles: false,
-		sshCommand: `$JCMD_COMMAND $(pidof java) $$ARGS`,
+		sshCommand:    `$JCMD_COMMAND $(pidof java) $$ARGS`,
 	},
 	"start-jfr": {
-		name: "start-jfr",
-		description: "Start a Java Flight Recorder recording on a running Java application (additional options via --args)",
+		name:          "start-jfr",
+		description:   "Start a Java Flight Recorder recording on a running Java application (additional options via --args)",
 		requiredTools: []string{"jcmd"},
 		generateFiles: false,
-		sshCommand: `$JCMD_COMMAND $(pidof java) JFR.start $$ARGS; echo "Use 'cf java stop-jfr $$APP_NAME --local-dir .' to copy the file"`,
+		sshCommand:    `$JCMD_COMMAND $(pidof java) JFR.start $$ARGS; echo "Use 'cf java stop-jfr $$APP_NAME --local-dir .' to copy the file"`,
 	},
 	"stop-jfr": {
-		name: "stop-jfr",
-		description: "Stop a Java Flight Recorder recording on a running Java application (additional options via --args)",
+		name:          "stop-jfr",
+		description:   "Stop a Java Flight Recorder recording on a running Java application (additional options via --args)",
 		requiredTools: []string{"jcmd"},
 		generateFiles: true,
 		fileExtension: ".jfr",
-		fileLabel: "JFR recording",
-		fileNamePart: "jfr",
-		sshCommand: `$JCMD_COMMAND $(pidof java) JFR.dump filename=$$FILE_NAME $$ARGS; $JCMD_COMMAND $(pidof java) JFR.stop`,
+		fileLabel:     "JFR recording",
+		fileNamePart:  "jfr",
+		sshCommand:    `$JCMD_COMMAND $(pidof java) JFR.dump filename=$$FILE_NAME $$ARGS; $JCMD_COMMAND $(pidof java) JFR.stop`,
 	},
 	"vm-version": {
-		name: "vm-version",
-		description: "Print the version of the Java Virtual Machine running a Java application",
+		name:          "vm-version",
+		description:   "Print the version of the Java Virtual Machine running a Java application",
 		requiredTools: []string{"jcmd"},
 		generateFiles: false,
-		sshCommand: `$JCMD_COMMAND $(pidof java) VM.version`,
+		sshCommand:    `$JCMD_COMMAND $(pidof java) VM.version`,
 	},
 	"vitals": {
-		name: "vitals",
-		description: "Print vital statistics about the Java Virtual Machine running a Java application",
+		name:          "vitals",
+		description:   "Print vital statistics about the Java Virtual Machine running a Java application",
 		requiredTools: []string{"jcmd"},
 		generateFiles: false,
-		sshCommand: `$JCMD_COMMAND $(pidof java) GC.class_stats; $JCMD_COMMAND $(pidof java) GC.heap_info; $JCMD_COMMAND $(pidof java) GC.run`,
+		sshCommand:    `$JCMD_COMMAND $(pidof java) VM.vitals`,
 	},
 	"asprof": {
-		name: "asprof",
-		description: "Run async-profiler commands passed to asprof via --args",
-		requiredTools: []string{"asprof"},
-		generateFiles: false,
-		sshCommand: `$ASPROF_COMMAND $$ARGS`,
+		name:                   "asprof",
+		description:            "Run async-profiler commands passed to asprof via --args",
+		onlyOnRecentSapMachine: true,
+		requiredTools:          []string{"asprof"},
+		generateFiles:          false,
+		sshCommand:             `$ASPROF_COMMAND $$ARGS`,
 	},
 	"start-asprof": {
-		name: "start-asprof",
-		description: "Start async-profiler profiling on a running Java application (additional options via --args)",
-		requiredTools: []string{"asprof"},
-		generateFiles: false,
-		needsFileName: true,
-		fileExtension: ".jfr",
-		fileNamePart: "asprof",
-		sshCommand: `$ASPROF_COMMAND start $(pidof java) $$ARGS -f $$FILE_NAME`,
-
+		name:                   "start-asprof",
+		description:            "Start async-profiler profiling on a running Java application (additional options via --args)",
+		onlyOnRecentSapMachine: true,
+		requiredTools:          []string{"asprof"},
+		generateFiles:          false,
+		needsFileName:          true,
+		fileExtension:          ".jfr",
+		fileNamePart:           "asprof",
+		sshCommand:             `$ASPROF_COMMAND start $(pidof java) $$ARGS -f $$FILE_NAME`,
 	},
 	"start-asprof-cpu-profile": {
-		name: "start-asprof-cpu-profile",
-		description: "Start async-profiler CPU profiling on a running Java application (additional options via --args)",
-		requiredTools: []string{"asprof"},
-		generateFiles: false,
-		needsFileName: true,
-		fileExtension: ".jfr",
-		fileNamePart: "asprof",
-		sshCommand: `$ASPROF_COMMAND start $$ARGS -f $$FILE_NAME -e ctimer $(pidof java)`,
+		name:                   "start-asprof-cpu-profile",
+		description:            "Start async-profiler CPU profiling on a running Java application (additional options via --args)",
+		onlyOnRecentSapMachine: true,
+		requiredTools:          []string{"asprof"},
+		generateFiles:          false,
+		needsFileName:          true,
+		fileExtension:          ".jfr",
+		fileNamePart:           "asprof",
+		sshCommand:             `$ASPROF_COMMAND start $$ARGS -f $$FILE_NAME -e ctimer $(pidof java)`,
 	},
 	"start-asprof-wall-clock-profile": {
-		name: "start-asprof-wall-clock-profile",
-		description: "Start async-profiler wall-clock profiling on a running Java application (additional options via --args)",
-		requiredTools: []string{"asprof"},
-		generateFiles: false,
-		needsFileName: true,
-		fileExtension: ".jfr",
-		fileNamePart: "asprof",
-		sshCommand: `$ASPROF_COMMAND start $$ARGS -f $$FILE_NAME -e wall $(pidof java)`,
+		name:                   "start-asprof-wall-clock-profile",
+		description:            "Start async-profiler wall-clock profiling on a running Java application (additional options via --args)",
+		onlyOnRecentSapMachine: true,
+		requiredTools:          []string{"asprof"},
+		generateFiles:          false,
+		needsFileName:          true,
+		fileExtension:          ".jfr",
+		fileNamePart:           "asprof",
+		sshCommand:             `$ASPROF_COMMAND start $$ARGS -f $$FILE_NAME -e wall $(pidof java)`,
 	},
 	"stop-asprof": {
-		name: "stop-asprof",
-		description: "Stop async-profiler profiling on a running Java application (additional options via --args)",
+		name:          "stop-asprof",
+		description:   "Stop async-profiler profiling on a running Java application (additional options via --args)",
 		requiredTools: []string{"asprof"},
 		generateFiles: true,
 		fileExtension: ".jfr",
-		fileLabel: "JFR recording",
-		fileNamePart: "asprof",
-		sshCommand: `$ASPROF_COMMAND stop $$ARGS $(pidof java)`,
+		fileLabel:     "JFR recording",
+		fileNamePart:  "asprof",
+		sshCommand:    `$ASPROF_COMMAND stop $$ARGS $(pidof java)`,
 	},
 }
 
@@ -261,7 +267,6 @@ func toSentenceCase(input string) string {
 	// Convert the first letter to uppercase
 	return strings.ToUpper(string(input[0])) + strings.ToLower(input[1:])
 }
-
 
 func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator uuid.UUIDGenerator, util utils.CfJavaPluginUtil, args []string) (string, error) {
 	if len(args) == 0 {
@@ -366,7 +371,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	fspath := remoteDir
 
 	var replacements = map[string]string{
-		"$$ARGS": miscArgs,
+		"$$ARGS":     miscArgs,
 		"$$APP_NAME": applicationName,
 	}
 
@@ -469,9 +474,13 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 	// with cf java [" + strings.Join(commandNames, "|") + "] APP_NAME
 	var usageText = "cf java [" + strings.Join(commandNames, "|") + "] APP_NAME"
 	for _, command := range commands {
-		usageText += "\n\n     " + command.name + "\n        " + command.description
+		usageText += "\n\n     " + command.name
+		if command.onlyOnRecentSapMachine {
+			usageText += " (recent SapMachine only)"
+		}
+		usageText += "\n        " + command.description
 	}
-    return plugin.PluginMetadata{
+	return plugin.PluginMetadata{
 		Name: "java",
 		Version: plugin.VersionType{
 			Major: 3,
