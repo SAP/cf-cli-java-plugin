@@ -14,6 +14,10 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+const (
+	JcmdDetectionCommand = "ASPROF_COMMAND=$(find -executable -name asprof | head -1 | tr -d [:space:]); if [ -n \"${ASPROF_COMMAND}\" ]; then JCMD_COMMAND=\"${ASPROF_COMMAND}\"; else %s; fi; JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z \"${JCMD_COMMAND}\" ]; then echo > \"jcmd not found\"; exit 1; fi"
+)
+
 type commandOutput struct {
 	out string
 	err error
@@ -509,8 +513,7 @@ fi'`, "UUUID", pluginUtil.UUID)
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
 					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--command", JavaDetectionCommand + "; " +
-						"JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z \"${JCMD_COMMAND}\" ]; " +
-						"then echo > \"jcmd not found\"; exit 1; fi; $JCMD_COMMAND $(pidof java) "}))
+						JcmdDetectionCommand + "; $JCMD_COMMAND $(pidof java) "}))
 				})
 
 			})
@@ -530,8 +533,7 @@ fi'`, "UUUID", pluginUtil.UUID)
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
 					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--command", JavaDetectionCommand + "; " +
-						"JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z \"${JCMD_COMMAND}\" ]; " +
-						"then echo > \"jcmd not found\"; exit 1; fi; $JCMD_COMMAND $(pidof java) bla blub"}))
+						JcmdDetectionCommand + "; $JCMD_COMMAND $(pidof java) bla blub"}))
 				})
 				DescribeTable("don't escape quotation marks", func(args string, expectedEnd string) {
 					output, err, cliOutput := captureOutput(func() (string, error) {
@@ -545,7 +547,7 @@ fi'`, "UUUID", pluginUtil.UUID)
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
 					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--command", JavaDetectionCommand + "; " +
-						"JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z \"${JCMD_COMMAND}\" ]; then echo > \"jcmd not found\"; exit 1; fi; $JCMD_COMMAND $(pidof java) " + expectedEnd}))
+						JcmdDetectionCommand + "; $JCMD_COMMAND $(pidof java) " + expectedEnd}))
 				},
 					Entry("basic", "bla blub", "bla blub"),
 					Entry("with quotes", "bla ' \" 'blub", "bla ' \" 'blub"),
@@ -568,7 +570,7 @@ fi'`, "UUUID", pluginUtil.UUID)
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
 					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--app-instance-index", "4", "--command", JavaDetectionCommand + "; " +
-						"JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z \"${JCMD_COMMAND}\" ]; then echo > \"jcmd not found\"; exit 1; fi; $JCMD_COMMAND $(pidof java) "}))
+						JcmdDetectionCommand + "; $JCMD_COMMAND $(pidof java) "}))
 				})
 
 			})
@@ -602,7 +604,7 @@ fi'`, "UUUID", pluginUtil.UUID)
 					})
 
 					expectedOutput := "cf ssh my_app --app-instance-index 4 --command '" + JavaDetectionCommand + "; " +
-						"JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z \"${JCMD_COMMAND}\" ]; then echo > \"jcmd not found\"; exit 1; fi; $JCMD_COMMAND $(pidof java) '"
+						JcmdDetectionCommand + "; $JCMD_COMMAND $(pidof java) '"
 
 					Expect(output).To(Equal(expectedOutput))
 					Expect(err).To(BeNil())

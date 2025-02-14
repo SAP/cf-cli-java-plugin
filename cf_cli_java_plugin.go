@@ -108,9 +108,11 @@ type Command struct {
 	Name                   string
 	Description            string
 	OnlyOnRecentSapMachine bool
-	RequiredTools          []string
-	GenerateFiles          bool
-	NeedsFileName          bool
+	// Required tools, checked and $TOOL_COMMAND set in the remote command
+	// jcmd is special: it uses asprof if available
+	RequiredTools []string
+	GenerateFiles bool
+	NeedsFileName bool
 	// use $$FILENAME to get the generated file Name and $$FSPATH to get the path where the file is stored
 	SshCommand    string
 	FilePattern   string
@@ -373,7 +375,13 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 	for _, requiredTool := range command.RequiredTools {
 		uppercase := strings.ToUpper(requiredTool)
-		remoteCommandTokens = append(remoteCommandTokens, fmt.Sprintf("%s_COMMAND=$(find -executable -name %s | head -1 | tr -d [:space:]); if [ -z \"${%s_COMMAND}\" ]; then echo > \"%s not found\"; exit 1; fi", uppercase, requiredTool, uppercase, requiredTool))
+		var toolCommand = fmt.Sprintf("%s_COMMAND=$(find -executable -name %s | head -1 | tr -d [:space:]); if [ -z \"${%s_COMMAND}\" ]; then echo > \"%s not found\"; exit 1; fi", uppercase, requiredTool, uppercase, requiredTool)
+		if requiredTool == "jcmd" {
+			// add code that first checks whether asprof is present and if so use `jcmd asprof` instead of `jcmd`
+			remoteCommandTokens = append(remoteCommandTokens, "ASPROF_COMMAND=$(find -executable -name asprof | head -1 | tr -d [:space:]); if [ -n \"${ASPROF_COMMAND}\" ]; then JCMD_COMMAND=\"${ASPROF_COMMAND}\"; else %s; fi", toolCommand)
+		} else {
+			remoteCommandTokens = append(remoteCommandTokens, toolCommand)
+		}
 	}
 	fileName := ""
 	fspath := remoteDir
