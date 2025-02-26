@@ -105,7 +105,7 @@ USAGE:
      vm-version
         Print the version of the Java Virtual Machine running a Java application
 
-     vitals
+     vm-vitals
         Print vital statistics about the Java Virtual Machine running a Java application
 
      asprof (recent SapMachine only)
@@ -126,10 +126,10 @@ USAGE:
 OPTIONS:
    -app-instance-index       -i [index], select to which instance of the app to connect
    -args                     Miscellaneous arguments to pass to the command in the container, be aware to end it with a space if it is a simple option
-   -container-dir            -cd, the directory path in the container that the heap dump file will be saved to
+   -container-dir            -cd, the directory path in the container that the heap dump/JFR/... file will be saved to
    -dry-run                  -n, just output to command line what would be executed
-   -keep                     -k, keep the heap dump in the container; by default the heap dump/... will be deleted from the container's filesystem after been downloaded
-   -local-dir                -ld, the local directory path that the dump file will be saved to
+   -keep                     -k, keep the heap dump in the container; by default the heap dump/JFR/... will be deleted from the container's filesystem after been downloaded
+   -local-dir                -ld, the local directory path that the dump/JFR/... file will be saved to
 </pre>
 
 The heap dumps and profiles will be copied to a local file if `-local-dir` is specified as a full folder path. Without providing `-local-dir` the heap dump will only be created in the container and not transferred.
