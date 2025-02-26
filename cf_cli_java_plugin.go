@@ -203,7 +203,7 @@ fi`,
 		SshCommand:    `$JCMD_COMMAND $(pidof java) VM.version`,
 	},
 	{
-		Name:          "vitals",
+		Name:          "vm-vitals",
 		Description:   "Print vital statistics about the Java Virtual Machine running a Java application",
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
