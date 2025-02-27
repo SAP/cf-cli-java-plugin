@@ -513,10 +513,10 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 					Usage: usageText,
 					Options: map[string]string{
 						"app-instance-index": "-i [index], select to which instance of the app to connect",
-						"keep":               "-k, keep the heap dump in the container; by default the heap dump/... will be deleted from the container's filesystem after been downloaded",
+						"keep":               "-k, keep the heap dump in the container; by default the heap dump/JFR/... will be deleted from the container's filesystem after been downloaded",
 						"dry-run":            "-n, just output to command line what would be executed",
-						"container-dir":      "-cd, the directory path in the container that the heap dump file will be saved to",
-						"local-dir":          "-ld, the local directory path that the dump file will be saved to",
+						"container-dir":      "-cd, the directory path in the container that the heap dump/JFR/... file will be saved to",
+						"local-dir":          "-ld, the local directory path that the dump/JFR/... file will be saved to",
 						"args":               "-a, Miscellaneous arguments to pass to the command in the container, be aware to end it with a space if it is a simple option",
 					},
 				},
