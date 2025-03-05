@@ -218,6 +218,13 @@ fi`,
 		SshCommand:             `$ASPROF_COMMAND $(pidof java) $$ARGS`,
 	},
 	{
+		Name:          "asprof-status",
+		Description:   "Get the status of async-profiler on a running Java application",
+		RequiredTools: []string{"asprof"},
+		GenerateFiles: false,
+		SshCommand:    `$ASPROF_COMMAND status $(pidof java) $$ARGS`,
+	},
+	{
 		Name:                   "start-asprof",
 		Description:            "Start async-profiler profiling on a running Java application (additional options via --args)",
 		OnlyOnRecentSapMachine: true,

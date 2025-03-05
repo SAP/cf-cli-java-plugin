@@ -111,6 +111,9 @@ USAGE:
      asprof (recent SapMachine only)
         Run async-profiler commands passed to asprof via --args
 
+     asprof-status
+        Get the status of async-profiler on a running Java application
+
      start-asprof (recent SapMachine only)
         Start async-profiler profiling on a running Java application (additional options via --args)
 
