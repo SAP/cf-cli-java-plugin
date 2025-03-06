@@ -385,7 +385,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		var toolCommand = fmt.Sprintf("%s_COMMAND=$(find -executable -name %s | head -1 | tr -d [:space:]); if [ -z \"${%s_COMMAND}\" ]; then echo > \"%s not found\"; exit 1; fi", uppercase, requiredTool, uppercase, requiredTool)
 		if requiredTool == "jcmd" {
 			// add code that first checks whether asprof is present and if so use `asprof jcmd` instead of `jcmd`
-			remoteCommandTokens = append(remoteCommandTokens, toolCommand, "ASPROF_COMMAND=$(find -executable -name asprof | head -1 | tr -d [:space:]); if [ -n \"${ASPROF_COMMAND}\" ]; then JCMD_COMMAND=\"${ASPROF_COMMAND} jcmd\"; else %s; fi")
+			remoteCommandTokens = append(remoteCommandTokens, toolCommand, "ASPROF_COMMAND=$(find -executable -name asprof | head -1 | tr -d [:space:]); if [ -n \"${ASPROF_COMMAND}\" ]; then JCMD_COMMAND=\"${ASPROF_COMMAND} jcmd\"; fi")
 		} else {
 			remoteCommandTokens = append(remoteCommandTokens, toolCommand)
 		}
