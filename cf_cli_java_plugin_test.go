@@ -10,7 +10,12 @@ import (
 	. "github.com/SAP/cf-cli-java-plugin/uuid/fakes"
 
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+)
+
+const (
+	JcmdDetectionCommand = "JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z \"${JCMD_COMMAND}\" ]; then echo > \"jcmd not found\"; exit 1; fi; ASPROF_COMMAND=$(find -executable -name asprof | head -1 | tr -d [:space:]); if [ -n \"${ASPROF_COMMAND}\" ]; then JCMD_COMMAND=\"${ASPROF_COMMAND} jcmd\"; fi"
 )
 
 type commandOutput struct {
@@ -112,8 +117,8 @@ var _ = Describe("CfJavaPlugin", func() {
 				})
 
 				Expect(output).To(BeEmpty())
-				Expect(err.Error()).To(ContainSubstring("Unrecognized command \"UNKNOWN_COMMAND\": supported commands are 'heap-dump' and 'thread-dump'"))
-				Expect(cliOutput).To(ContainSubstring("Unrecognized command \"UNKNOWN_COMMAND\": supported commands are 'heap-dump' and 'thread-dump'"))
+				Expect(err.Error()).To(ContainSubstring("Unrecognized command \"UNKNOWN_COMMAND\": supported commands"))
+				Expect(cliOutput).To(ContainSubstring("Unrecognized command \"UNKNOWN_COMMAND\": supported commands"))
 
 				Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
 				Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"help", "java"}))
@@ -177,7 +182,7 @@ var _ = Describe("CfJavaPlugin", func() {
 					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh",
 						"my_app",
 						"--command",
-						"if ! pgrep -x \"java\" > /dev/null; then echo \"No 'java' process found running. Are you sure this is a Java app?\" >&2; exit 1; fi; if [ -f /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof ]; then echo >&2 'Heap dump /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof already exists'; exit 1; fi; JMAP_COMMAND=`find -executable -name jmap | head -1 | tr -d [:space:]`; JVMMON_COMMAND=`find -executable -name jvmmon | head -1 | tr -d [:space:]`; if [ -n \"${JMAP_COMMAND}\" ]; then true; OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=/tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof $(pidof java) ) || STATUS_CODE=$?; if [ ! -s /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; elif [ -n \"${JVMMON_COMMAND}\" ]; then true; echo -e 'change command line flag flags=-XX:HeapDumpOnDemandPath=/tmp\ndump heap' > setHeapDumpOnDemandPath.sh; OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -cmd \"setHeapDumpOnDemandPath.sh\" ) || STATUS_CODE=$?; sleep 5; HEAP_DUMP_NAME=`find /tmp -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1`; SIZE=-1; OLD_SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); while [ ${SIZE} != ${OLD_SIZE} ]; do OLD_SIZE=${SIZE}; sleep 3; SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); done; if [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; fi",
+						"if ! pgrep -x \"java\" > /dev/null; then echo \"No 'java' process found running. Are you sure this is a Java app?\" >&2; exit 1; fi; if [ -f /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof ]; then echo >&2 'Heap dump /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof already exists'; exit 1; fi\nJMAP_COMMAND=$(find -executable -name jmap | head -1 | tr -d [:space:])\n# SAP JVM: Wrap everything in an if statement in case jvmmon is available\nJVMMON_COMMAND=$(find -executable -name jvmmon | head -1 | tr -d [:space:])\nif [ -n \"${JMAP_COMMAND}\" ]; then\nOUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=/tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof $(pidof java) ) || STATUS_CODE=$?\nif [ ! -s /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi\nif [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi\nelif [ -n \"${JVMMON_COMMAND}\" ]; then\necho -e 'change command line flag flags=-XX:HeapDumpOnDemandPath=/tmp\\ndump heap' > setHeapDumpOnDemandPath.sh\nOUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -cmd \"setHeapDumpOnDemandPath.sh\" ) || STATUS_CODE=$?\nsleep 5 # Writing the heap dump is triggered asynchronously -> give the JVM some time to create the file\nHEAP_DUMP_NAME=$(find /tmp -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1)\nSIZE=-1; OLD_SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); while [ ${SIZE} != ${OLD_SIZE} ]; do OLD_SIZE=${SIZE}; sleep 3; SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); done\nif [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi\nif [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi\nfi",
 					}))
 
 				})
@@ -204,8 +209,7 @@ var _ = Describe("CfJavaPlugin", func() {
 						"--app-instance-index",
 						"4",
 						"--command",
-						"if ! pgrep -x \"java\" > /dev/null; then echo \"No 'java' process found running. Are you sure this is a Java app?\" >&2; exit 1; fi; if [ -f /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof ]; then echo >&2 'Heap dump /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof already exists'; exit 1; fi; JMAP_COMMAND=`find -executable -name jmap | head -1 | tr -d [:space:]`; JVMMON_COMMAND=`find -executable -name jvmmon | head -1 | tr -d [:space:]`; if [ -n \"${JMAP_COMMAND}\" ]; then true; OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=/tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof $(pidof java) ) || STATUS_CODE=$?; if [ ! -s /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; elif [ -n \"${JVMMON_COMMAND}\" ]; then true; echo -e 'change command line flag flags=-XX:HeapDumpOnDemandPath=/tmp\ndump heap' > setHeapDumpOnDemandPath.sh; OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -cmd \"setHeapDumpOnDemandPath.sh\" ) || STATUS_CODE=$?; sleep 5; HEAP_DUMP_NAME=`find /tmp -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1`; SIZE=-1; OLD_SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); while [ ${SIZE} != ${OLD_SIZE} ]; do OLD_SIZE=${SIZE}; sleep 3; SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); done; if [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; fi",
-					}))
+						"if ! pgrep -x \"java\" > /dev/null; then echo \"No 'java' process found running. Are you sure this is a Java app?\" >&2; exit 1; fi; if [ -f /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof ]; then echo >&2 'Heap dump /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof already exists'; exit 1; fi\nJMAP_COMMAND=$(find -executable -name jmap | head -1 | tr -d [:space:])\n# SAP JVM: Wrap everything in an if statement in case jvmmon is available\nJVMMON_COMMAND=$(find -executable -name jvmmon | head -1 | tr -d [:space:])\nif [ -n \"${JMAP_COMMAND}\" ]; then\nOUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=/tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof $(pidof java) ) || STATUS_CODE=$?\nif [ ! -s /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi\nif [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi\nelif [ -n \"${JVMMON_COMMAND}\" ]; then\necho -e 'change command line flag flags=-XX:HeapDumpOnDemandPath=/tmp\\ndump heap' > setHeapDumpOnDemandPath.sh\nOUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -cmd \"setHeapDumpOnDemandPath.sh\" ) || STATUS_CODE=$?\nsleep 5 # Writing the heap dump is triggered asynchronously -> give the JVM some time to create the file\nHEAP_DUMP_NAME=$(find /tmp -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1)\nSIZE=-1; OLD_SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); while [ ${SIZE} != ${OLD_SIZE} ]; do OLD_SIZE=${SIZE}; sleep 3; SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); done\nif [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi\nif [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi\nfi"}))
 
 				})
 
@@ -286,7 +290,7 @@ var _ = Describe("CfJavaPlugin", func() {
 						"--app-instance-index",
 						"4",
 						"--command",
-						"if ! pgrep -x \"java\" > /dev/null; then echo \"No 'java' process found running. Are you sure this is a Java app?\" >&2; exit 1; fi; if [ -f /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof ]; then echo >&2 'Heap dump /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof already exists'; exit 1; fi; JMAP_COMMAND=`find -executable -name jmap | head -1 | tr -d [:space:]`; JVMMON_COMMAND=`find -executable -name jvmmon | head -1 | tr -d [:space:]`; if [ -n \"${JMAP_COMMAND}\" ]; then true; OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=/tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof $(pidof java) ) || STATUS_CODE=$?; if [ ! -s /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; elif [ -n \"${JVMMON_COMMAND}\" ]; then true; echo -e 'change command line flag flags=-XX:HeapDumpOnDemandPath=/tmp\ndump heap' > setHeapDumpOnDemandPath.sh; OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -cmd \"setHeapDumpOnDemandPath.sh\" ) || STATUS_CODE=$?; sleep 5; HEAP_DUMP_NAME=`find /tmp -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1`; SIZE=-1; OLD_SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); while [ ${SIZE} != ${OLD_SIZE} ]; do OLD_SIZE=${SIZE}; sleep 3; SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); done; if [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; fi"}))
+						"if ! pgrep -x \"java\" > /dev/null; then echo \"No 'java' process found running. Are you sure this is a Java app?\" >&2; exit 1; fi; if [ -f /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof ]; then echo >&2 'Heap dump /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof already exists'; exit 1; fi\nJMAP_COMMAND=$(find -executable -name jmap | head -1 | tr -d [:space:])\n# SAP JVM: Wrap everything in an if statement in case jvmmon is available\nJVMMON_COMMAND=$(find -executable -name jvmmon | head -1 | tr -d [:space:])\nif [ -n \"${JMAP_COMMAND}\" ]; then\nOUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=/tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof $(pidof java) ) || STATUS_CODE=$?\nif [ ! -s /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi\nif [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi\nelif [ -n \"${JVMMON_COMMAND}\" ]; then\necho -e 'change command line flag flags=-XX:HeapDumpOnDemandPath=/tmp\\ndump heap' > setHeapDumpOnDemandPath.sh\nOUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -cmd \"setHeapDumpOnDemandPath.sh\" ) || STATUS_CODE=$?\nsleep 5 # Writing the heap dump is triggered asynchronously -> give the JVM some time to create the file\nHEAP_DUMP_NAME=$(find /tmp -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1)\nSIZE=-1; OLD_SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); while [ ${SIZE} != ${OLD_SIZE} ]; do OLD_SIZE=${SIZE}; sleep 3; SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); done\nif [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi\nif [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi\nfi"}))
 
 				})
 
@@ -300,8 +304,24 @@ var _ = Describe("CfJavaPlugin", func() {
 						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "heap-dump", "my_app", "-i", "4", "-k", "-n"})
 						return output, err
 					})
-					expectedOutput := "cf ssh my_app --app-instance-index 4 --command 'if ! pgrep -x \"java\" > /dev/null; then echo \"No 'java' process found running. Are you sure this is a Java app?\" >&2; exit 1; fi; if [ -f /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof ]; then echo >&2 'Heap dump /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof already exists'; exit 1; fi; JMAP_COMMAND=`find -executable -name jmap | head -1 | tr -d [:space:]`; JVMMON_COMMAND=`find -executable -name jvmmon | head -1 | tr -d [:space:]`; if [ -n \"${JMAP_COMMAND}\" ]; then true; OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=/tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof $(pidof java) ) || STATUS_CODE=$?; if [ ! -s /tmp/my_app-heapdump-" + pluginUtil.UUID + ".hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; elif [ -n \"${JVMMON_COMMAND}\" ]; then true; echo -e 'change command line flag flags=-XX:HeapDumpOnDemandPath=/tmp\ndump heap' > setHeapDumpOnDemandPath.sh; OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -cmd \"setHeapDumpOnDemandPath.sh\" ) || STATUS_CODE=$?; sleep 5; HEAP_DUMP_NAME=`find /tmp -name 'java_pid*.hprof' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' " +
-						"'\\n' | head -n 1`; SIZE=-1; OLD_SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); while [ ${SIZE} != ${OLD_SIZE} ]; do OLD_SIZE=${SIZE}; sleep 3; SIZE=$(stat -c '%s' \"${HEAP_DUMP_NAME}\"); done; if [ ! -s \"${HEAP_DUMP_NAME}\" ]; then echo >&2 ${OUTPUT}; exit 1; fi; if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi; fi'"
+
+					expectedOutput := strings.ReplaceAll(`cf ssh my_app --app-instance-index 4 --command 'if ! pgrep -x "java" > /dev/null; then echo "No 'java' process found running. Are you sure this is a Java app?" >&2; exit 1; fi; if [ -f /tmp/my_app-heapdump-UUUID.hprof ]; then echo >&2 'Heap dump /tmp/my_app-heapdump-UUUID.hprof already exists'; exit 1; fi
+JMAP_COMMAND=$(find -executable -name jmap | head -1 | tr -d [:space:])
+# SAP JVM: Wrap everything in an if statement in case jvmmon is available
+JVMMON_COMMAND=$(find -executable -name jvmmon | head -1 | tr -d [:space:])
+if [ -n "${JMAP_COMMAND}" ]; then
+OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=/tmp/my_app-heapdump-UUUID.hprof $(pidof java) ) || STATUS_CODE=$?
+if [ ! -s /tmp/my_app-heapdump-UUUID.hprof ]; then echo >&2 ${OUTPUT}; exit 1; fi
+if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi
+elif [ -n "${JVMMON_COMMAND}" ]; then
+echo -e 'change command line flag flags=-XX:HeapDumpOnDemandPath=/tmp\ndump heap' > setHeapDumpOnDemandPath.sh
+OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -cmd "setHeapDumpOnDemandPath.sh" ) || STATUS_CODE=$?
+sleep 5 # Writing the heap dump is triggered asynchronously -> give the JVM some time to create the file
+HEAP_DUMP_NAME=$(find /tmp -name 'java_pid*.hprof' -printf '%T@ %p\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\0' '\n' | head -n 1)
+SIZE=-1; OLD_SIZE=$(stat -c '%s' "${HEAP_DUMP_NAME}"); while [ ${SIZE} != ${OLD_SIZE} ]; do OLD_SIZE=${SIZE}; sleep 3; SIZE=$(stat -c '%s' "${HEAP_DUMP_NAME}"); done
+if [ ! -s "${HEAP_DUMP_NAME}" ]; then echo >&2 ${OUTPUT}; exit 1; fi
+if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi
+fi'`, "UUUID", pluginUtil.UUID)
 
 					Expect(output).To(Equal(expectedOutput))
 
@@ -405,8 +425,8 @@ var _ = Describe("CfJavaPlugin", func() {
 					})
 
 					Expect(output).To(BeEmpty())
-					Expect(err.Error()).To(ContainSubstring("The flag \"keep\" is not supported for thread-dumps"))
-					Expect(cliOutput).To(ContainSubstring("The flag \"keep\" is not supported for thread-dumps"))
+					Expect(err.Error()).To(ContainSubstring("The flag \"keep\" is not supported for thread-dump"))
+					Expect(cliOutput).To(ContainSubstring("The flag \"keep\" is not supported for thread-dump"))
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
 					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"help", "java"}))
@@ -438,6 +458,164 @@ var _ = Describe("CfJavaPlugin", func() {
 
 		})
 
+		Context("when invoked to generate a jcmd", func() {
+
+			Context("without application name", func() {
+
+				It("outputs an error and does not invoke cf ssh", func() {
+
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd"})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err.Error()).To(ContainSubstring("No application name provided"))
+					Expect(cliOutput).To(ContainSubstring("No application name provided"))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"help", "java"}))
+				})
+
+			})
+
+			Context("with too many arguments", func() {
+
+				It("outputs an error and does not invoke cf ssh", func() {
+
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd", "my_app", "my_file", "ciao"})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err.Error()).To(ContainSubstring("Too many arguments provided: my_file, ciao"))
+					Expect(cliOutput).To(ContainSubstring("Too many arguments provided: my_file, ciao"))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"help", "java"}))
+				})
+
+			})
+
+			Context("with just the app name", func() {
+
+				It("invokes cf ssh with the basic commands", func() {
+
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd", "my_app"})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err).To(BeNil())
+					Expect(cliOutput).To(Equal(""))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--command", JavaDetectionCommand + "; " +
+						JcmdDetectionCommand + "; $JCMD_COMMAND $(pidof java) "}))
+				})
+
+			})
+
+			Context("with --args", func() {
+
+				It("invokes cf ssh with the basic commands", func() {
+
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd", "my_app", "--args", "bla blub"})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err).To(BeNil())
+					Expect(cliOutput).To(Equal(""))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--command", JavaDetectionCommand + "; " +
+						JcmdDetectionCommand + "; $JCMD_COMMAND $(pidof java) bla blub"}))
+				})
+				DescribeTable("don't escape quotation marks", func(args string, expectedEnd string) {
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd", "my_app", "--args", args})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err).To(BeNil())
+					Expect(cliOutput).To(Equal(""))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--command", JavaDetectionCommand + "; " +
+						JcmdDetectionCommand + "; $JCMD_COMMAND $(pidof java) " + expectedEnd}))
+				},
+					Entry("basic", "bla blub", "bla blub"),
+					Entry("with quotes", "bla ' \" 'blub", "bla ' \" 'blub"),
+					Entry("with newlines", "bla\nblub", "bla\nblub"),
+				)
+			})
+
+			Context("for a container with index > 0", func() {
+
+				It("invokes cf ssh with the basic commands", func() {
+
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd", "my_app", "-i", "4"})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err).To(BeNil())
+					Expect(cliOutput).To(Equal(""))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh", "my_app", "--app-instance-index", "4", "--command", JavaDetectionCommand + "; " +
+						JcmdDetectionCommand + "; $JCMD_COMMAND $(pidof java) "}))
+				})
+
+			})
+
+			Context("with the --keep flag", func() {
+
+				It("fails", func() {
+
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd", "my_app", "-i", "4", "-k"})
+						return output, err
+					})
+
+					Expect(output).To(BeEmpty())
+					Expect(err.Error()).To(ContainSubstring("The flag \"keep\" is not supported for jcmd"))
+					Expect(cliOutput).To(ContainSubstring("The flag \"keep\" is not supported for jcmd"))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
+					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"help", "java"}))
+				})
+
+			})
+
+			Context("with the --dry-run flag", func() {
+
+				It("prints out the command line without executing the command", func() {
+
+					output, err, cliOutput := captureOutput(func() (string, error) {
+						output, err := subject.DoRun(commandExecutor, uuidGenerator, pluginUtil, []string{"java", "jcmd", "my_app", "-i", "4", "-n"})
+						return output, err
+					})
+
+					expectedOutput := "cf ssh my_app --app-instance-index 4 --command '" + JavaDetectionCommand + "; " +
+						JcmdDetectionCommand + "; $JCMD_COMMAND $(pidof java) '"
+
+					Expect(output).To(Equal(expectedOutput))
+					Expect(err).To(BeNil())
+					Expect(cliOutput).To(ContainSubstring(expectedOutput))
+
+					Expect(commandExecutor.ExecuteCallCount()).To(Equal(0))
+				})
+
+			})
+
+		})
 	})
 
 })
