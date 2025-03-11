@@ -144,7 +144,7 @@ Providing `-container-dir` is optional. If specified the plugin will create the 
 cf java [heap-dump|stop-jfr|stop-asprof] [my-app] -local-dir /local/path [-container-dir /var/fspath]
 ```
 
-Everything else, like thread dumps, will be outputted to `std-out`.
+Everything else, like thread dumps, will be output to `std-out`.
 You may want to redirect the command's output to file, e.g., by executing:
 
 ```shell
