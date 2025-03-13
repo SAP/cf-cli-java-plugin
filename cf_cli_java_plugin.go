@@ -119,6 +119,9 @@ type Command struct {
 	FileExtension string
 	FileLabel     string
 	FileNamePart  string
+	// Run the command in a subfolder of the container
+	GenerateArbitraryFiles  bool
+	GenerateArbitraryFilesFolderName string
 }
 
 var commands = []Command{
@@ -215,6 +218,8 @@ fi`,
 		OnlyOnRecentSapMachine: true,
 		RequiredTools:          []string{"asprof"},
 		GenerateFiles:          false,
+		GenerateArbitraryFiles:           true,
+		GenerateArbitraryFilesFolderName: "asprof",
 		SshCommand:             `$ASPROF_COMMAND $(pidof java) $$ARGS`,
 	},
 	{
@@ -244,7 +249,7 @@ fi`,
 		NeedsFileName:          true,
 		FileExtension:          ".jfr",
 		FileNamePart:           "asprof",
-		SshCommand:             `$ASPROF_COMMAND start $$ARGS -f $$FILE_NAME -e ctimer $(pidof java)`,
+		SshCommand:             `$ASPROF_COMMAND start $$ARGS -f $$FILE_NAME -e cpu $(pidof java)`,
 	},
 	{
 		Name:                   "start-asprof-wall-clock-profile",
@@ -352,7 +357,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	}
 
 	command := commands[index]
-	if !command.GenerateFiles {
+	if !command.GenerateFiles && !command.GenerateArbitraryFiles {
 		for _, flag := range fileFlags {
 			if commandFlags.IsSet(flag) {
 				return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for %s", flag, command.Name)}
@@ -382,10 +387,10 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 	for _, requiredTool := range command.RequiredTools {
 		uppercase := strings.ToUpper(requiredTool)
-		var toolCommand = fmt.Sprintf("%s_COMMAND=$(find -executable -name %s | head -1 | tr -d [:space:]); if [ -z \"${%s_COMMAND}\" ]; then echo \"%s not found\"; exit 1; fi", uppercase, requiredTool, uppercase, requiredTool)
+		var toolCommand = fmt.Sprintf("%s_COMMAND=$(realpath $(find -executable -name %s | head -1 | tr -d [:space:])); if [ -z \"${%s_COMMAND}\" ]; then echo \"%s not found\"; exit 1; fi", uppercase, requiredTool, uppercase, requiredTool)
 		if requiredTool == "jcmd" {
 			// add code that first checks whether asprof is present and if so use `asprof jcmd` instead of `jcmd`
-			remoteCommandTokens = append(remoteCommandTokens, toolCommand, "ASPROF_COMMAND=$(find -executable -name asprof | head -1 | tr -d [:space:]); if [ -n \"${ASPROF_COMMAND}\" ]; then JCMD_COMMAND=\"${ASPROF_COMMAND} jcmd\"; fi")
+			remoteCommandTokens = append(remoteCommandTokens, toolCommand, "ASPROF_COMMAND=$(realpath $(find -executable -name asprof | head -1 | tr -d [:space:])); if [ -n \"${ASPROF_COMMAND}\" ]; then JCMD_COMMAND=\"${ASPROF_COMMAND} jcmd\"; fi")
 		} else {
 			remoteCommandTokens = append(remoteCommandTokens, toolCommand)
 		}
@@ -398,15 +403,23 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		"$$APP_NAME": applicationName,
 	}
 
-	if command.GenerateFiles || command.NeedsFileName {
+	if command.GenerateFiles || command.NeedsFileName || command.GenerateArbitraryFiles {
 		fspath, err = util.GetAvailablePath(applicationName, remoteDir)
 		if err != nil {
 			return "", err
+		}
+		if command.GenerateArbitraryFiles {
+			fspath = fspath + "/" + command.GenerateArbitraryFilesFolderName
 		}
 
 		fileName = fspath + "/" + applicationName + "-" + command.FileNamePart + "-" + uuidGenerator.Generate() + command.FileExtension
 		replacements["$$FILE_NAME"] = fileName
 		replacements["$$FSPATH"] = fspath
+		if command.GenerateArbitraryFiles {
+			// prepend 'mkdir -p $$FSPATH' to the command to create the directory if it does not exist
+			remoteCommandTokens = append([]string{"mkdir -p " + fspath}, remoteCommandTokens...)
+			remoteCommandTokens = append(remoteCommandTokens, "cd " + fspath)
+		}
 	}
 
 	var commandText = command.SshCommand
@@ -470,6 +483,34 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 				return "", err
 			}
 			fmt.Println(toSentenceCase(command.FileLabel) + " file deleted in app container")
+		}
+	}
+	if command.GenerateArbitraryFiles {
+		// download all files in the generic folder
+		files, err := util.ListFiles(cfSSHArguments, fspath)
+		if err != nil {
+			return "", err
+		}
+		if copyToLocal {
+			for _, file := range files {
+				localFileFullPath := localDir + "/" + file
+				err = util.CopyOverCat(cfSSHArguments, fspath+"/"+file, localFileFullPath)
+				if err == nil {
+					fmt.Printf("File %s saved to: %s\n", file, localFileFullPath)
+				} else {
+					return "", err
+				}
+			}
+		} else {
+			fmt.Println(toSentenceCase(command.FileLabel) + " will not be copied as parameter `local-dir` was not set")
+		}
+
+		if !keepAfterDownload {
+			err = util.DeleteRemoteFile(cfSSHArguments, fspath)
+			if err != nil {
+				return "", err
+			}
+			fmt.Println("File folder deleted in app container")
 		}
 	}
 	// We keep this around to make the compiler happy, but commandExecutor.Execute will cause an os.Exit

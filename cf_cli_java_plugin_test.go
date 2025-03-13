@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	JcmdDetectionCommand = "JCMD_COMMAND=$(find -executable -name jcmd | head -1 | tr -d [:space:]); if [ -z \"${JCMD_COMMAND}\" ]; then echo \"jcmd not found\"; exit 1; fi; ASPROF_COMMAND=$(find -executable -name asprof | head -1 | tr -d [:space:]); if [ -n \"${ASPROF_COMMAND}\" ]; then JCMD_COMMAND=\"${ASPROF_COMMAND} jcmd\"; fi"
+	JcmdDetectionCommand = "JCMD_COMMAND=$(realpath $(find -executable -name jcmd | head -1 | tr -d [:space:])); if [ -z \"${JCMD_COMMAND}\" ]; then echo \"jcmd not found\"; exit 1; fi; ASPROF_COMMAND=$(realpath $(find -executable -name asprof | head -1 | tr -d [:space:])); if [ -n \"${ASPROF_COMMAND}\" ]; then JCMD_COMMAND=\"${ASPROF_COMMAND} jcmd\"; fi"
 )
 
 type commandOutput struct {

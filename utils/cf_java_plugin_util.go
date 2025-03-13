@@ -8,4 +8,5 @@ type CfJavaPluginUtil interface {
 	FindHeapDumpFile(args []string, fullpath string, fspath string) (string, error)
 	FindJFRFile(args []string, fullpath string, fspath string) (string, error)
 	FindFile(args []string, fullpath string, fspath string, pattern string) (string, error)
+	ListFiles(args []string, path string) ([]string, error)
 }

@@ -92,3 +92,7 @@ func (fake FakeCfJavaPluginUtil) FindJFRFile(args []string, fullpath string, fsp
 func (fake FakeCfJavaPluginUtil) FindFile(args []string, fullpath string, fspath string, pattern string) (string, error) {
 	return fake.FindHeapDumpFile(args, fullpath, fspath) // same as FindHeapDumpFile, just to avoid duplication
 }
+
+func (fake FakeCfJavaPluginUtil) ListFiles(args []string, path string) ([]string, error) {
+	return []string{fake.OutputFileName}, nil
+}

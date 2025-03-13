@@ -186,7 +186,7 @@ func (checker CfJavaPluginUtilImpl) CopyOverCat(args []string, src string, dest 
 }
 
 func (checker CfJavaPluginUtilImpl) DeleteRemoteFile(args []string, path string) error {
-	args = append(args, "rm "+path)
+	args = append(args, "rm -fr "+path)
 	_, err := exec.Command("cf", args...).Output()
 
 	if err != nil {
@@ -217,4 +217,15 @@ func (checker CfJavaPluginUtilImpl) FindFile(args []string, fullpath string, fsp
 
 	return strings.Trim(string(output[:]), "\n"), nil
 
+}
+
+func (checker CfJavaPluginUtilImpl) ListFiles(args []string, path string) ([]string, error) {
+	cmd := "ls " + path
+	args = append(args, cmd)
+	output, err := exec.Command("cf", args...).Output()
+
+	if err != nil {
+		return nil, errors.New("error occured while listing files: " + string(output[:]))
+	}
+	return strings.Split(strings.Trim(string(output[:]), "\n"), "\n"), nil
 }
