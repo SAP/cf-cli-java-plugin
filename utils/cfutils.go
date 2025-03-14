@@ -7,6 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"slices"
+	"sort"
+	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
 type CfJavaPluginUtilImpl struct {
@@ -93,10 +96,36 @@ func checkUserPathAvailability(app string, path string) (bool, error) {
 	return false, nil
 }
 
+func (checker CfJavaPluginUtilImpl) FindReasonForAccessError(app string) string {
+	out, err := exec.Command("cf", "apps").Output()
+	if err != nil {
+		return "cf is not logged in, please login and try again"
+	}
+	// find all app names
+	lines := strings.Split(string(out[:]), "\n")
+	appNames := make([]string, 100)
+	foundHeader := false
+	for _, line := range lines {
+		if foundHeader && len(line) > 0 {
+			appNames = append(appNames, strings.Fields(line)[0])
+		} else if strings.Contains(line, "name") && strings.Contains(line, "requested state") && strings.Contains(line, "processes") && strings.Contains(line, "routes") {
+			foundHeader = true
+		}
+	}
+	if len(appNames) == 0 {
+		return "No apps in your realm, please check if you're logged in and the app exists"
+	}
+	if slices.Contains(appNames, app) {
+		return "Problems accessing the app " + app
+	}
+	matches := fuzzy.RankFind(app, appNames)
+	sort.Sort(matches)
+	return "Could not find " + app + ". Did you mean " + matches[0].Target + "?"
+}
 func (checker CfJavaPluginUtilImpl) CheckRequiredTools(app string) (bool, error) {
 	guid, err := exec.Command("cf", "app", app, "--guid").Output()
 	if err != nil {
-		return false, err
+		return false, errors.New(checker.FindReasonForAccessError(app))
 	}
 	output, err := exec.Command("cf", "curl", "/v3/apps/"+strings.TrimSuffix(string(guid), "\n")+"/ssh_enabled").Output()
 	if err != nil {

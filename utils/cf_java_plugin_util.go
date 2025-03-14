@@ -1,6 +1,7 @@
 package utils
 
 type CfJavaPluginUtil interface {
+	FindReasonForAccessError(app string) string
 	CheckRequiredTools(app string) (bool, error)
 	GetAvailablePath(data string, userpath string) (string, error)
 	CopyOverCat(args []string, src string, dest string) error

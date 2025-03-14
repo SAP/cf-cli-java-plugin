@@ -379,6 +379,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	}
 
 	supported, err := util.CheckRequiredTools(applicationName)
+
 	if err != nil || !supported {
 		return "required tools checking failed", err
 	}

@@ -15,6 +15,10 @@ type FakeCfJavaPluginUtil struct {
 	OutputFileName       string
 }
 
+func (fakeUtil FakeCfJavaPluginUtil) FindReasonForAccessError(app string) string {
+	return "Error occured while accessing the application: " + app + ", please check the application is running and you have access to the application"
+}
+
 func (fakeUtil FakeCfJavaPluginUtil) CheckRequiredTools(app string) (bool, error) {
 
 	if !fakeUtil.SshEnabled {

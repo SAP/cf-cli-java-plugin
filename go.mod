@@ -58,6 +58,7 @@ require (
 	github.com/kr/pty v1.1.1 // indirect
 	github.com/kr/text v0.1.0 // indirect
 	github.com/ledongthuc/pdf v0.0.0-20220302134840-0c2507a12d80 // indirect
+	github.com/lithammer/fuzzysearch v1.1.8 // indirect
 	github.com/lunixbochs/vtclean v1.0.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
