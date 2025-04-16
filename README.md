@@ -1,4 +1,4 @@
-[![REUSE status](https://api.reuse.software/badge/github.com/SAP/cf-cli-java-plugin)](https://api.reuse.software/info/github.com/SAP/cf-cli-java-plugin)
+[![REUSE status](https://api.reuse.software/badge/github.com/SAP/cf-cli-java-plugin)](https://api.reuse.software/info/github.com/SAP/cf-cli-java-plugin) [![Build and Snapshot Release](https://github.com/SAP/cf-cli-java-plugin/actions/workflows/build-and-snapshot.yml/badge.svg)](https://github.com/SAP/cf-cli-java-plugin/actions/workflows/build-and-snapshot.yml)
 
 # Cloud Foundry Command Line Java plugin
 
@@ -28,6 +28,22 @@ If you've already installed the plugin and are updating it, you must first execu
 Install the plugin with `cf install-plugin [cf-cli-java-plugin]` (replace `[cf-cli-java-plugin]` with the actual binary name you will use, which depends on the OS you are running).
 
 You can verify that the plugin is successfully installed by looking for `java` in the output of `cf plugins`.
+
+### Manual Installation of Snapshot Release
+
+Download the current snapshot release from [GitHub](https://github.com/SAP/cf-cli-java-plugin/releases/tag/snapshot).
+This is intended for experimentation and might fail.
+
+To install a new version of the plugin, run the following:
+
+```sh
+# on Mac arm64
+cf install-plugin -f https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-macos-arm64
+# on Windows x86
+cf install-plugin -f https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-windows-amd64
+# on Linux x86
+cf install-plugin -f https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-linux-amd64
+```
 
 ### Updating from version 1.x to 2.x
 

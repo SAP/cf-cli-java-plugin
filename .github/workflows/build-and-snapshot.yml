@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - master
   pull_request:
   schedule:
     - cron: '0 0 * * 0' # Weekly on Sunday at midnight
@@ -66,6 +67,15 @@ jobs:
         run: |
           mkdir -p dist
           mv dist/*/* dist/ || true
+      
+      - uses: thomashampson/delete-older-releases@main
+        with:
+          keep_latest: 0
+          delete_tag_regex: snapshot
+          prerelease_only: true
+          delete_tags: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -73,6 +83,7 @@ jobs:
           files: dist/*
           prerelease: true
           tag_name: snapshot
+          overwrite: true
           body: |
             This is a snapshot release of the cf-cli-java-plugin.
             It includes the latest changes and is not intended for production use.
