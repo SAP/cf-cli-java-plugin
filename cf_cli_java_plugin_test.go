@@ -176,7 +176,7 @@ var _ = Describe("CfJavaPlugin", func() {
 					})
 					Expect(output).To(BeEmpty())
 					Expect(err).To(BeNil())
-					Expect(cliOutput).To(Equal("Successfully created heap dump in application container at: " + pluginUtil.Fspath + "/" + pluginUtil.OutputFileName + "|Heap dump will not be copied as parameter `local-dir` was not set|Heap dump file deleted in app container|"))
+					Expect(cliOutput).To(Equal("Successfully created heap dump in application container at: " + pluginUtil.Fspath + "/" + pluginUtil.OutputFileName + "|Heap dump file saved to: ./my_app-heapdump-" + pluginUtil.UUID + ".hprof|Heap dump file deleted in application container|"))
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
 					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh",
@@ -200,7 +200,7 @@ var _ = Describe("CfJavaPlugin", func() {
 
 					Expect(output).To(BeEmpty())
 					Expect(err).To(BeNil())
-					Expect(cliOutput).To(Equal("Successfully created heap dump in application container at: " + pluginUtil.Fspath + "/" + pluginUtil.OutputFileName + "|Heap dump will not be copied as parameter `local-dir` was not set|Heap dump file deleted in app container|"))
+					Expect(cliOutput).To(Equal("Successfully created heap dump in application container at: " + pluginUtil.Fspath + "/" + pluginUtil.OutputFileName + "|Heap dump file saved to: ./my_app-heapdump-" + pluginUtil.UUID + ".hprof|Heap dump file deleted in application container|"))
 
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
 					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{
@@ -283,7 +283,7 @@ var _ = Describe("CfJavaPlugin", func() {
 
 					Expect(output).To(BeEmpty())
 					Expect(err).To(BeNil())
-					Expect(cliOutput).To(Equal("Successfully created heap dump in application container at: " + pluginUtil.Fspath + "/" + pluginUtil.OutputFileName + "|Heap dump will not be copied as parameter `local-dir` was not set|"))
+					Expect(cliOutput).To(Equal("Successfully created heap dump in application container at: " + pluginUtil.Fspath + "/" + pluginUtil.OutputFileName + "|Heap dump file saved to: ./my_app-heapdump-" + pluginUtil.UUID + ".hprof|"))
 					Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
 					Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"ssh",
 						"my_app",
