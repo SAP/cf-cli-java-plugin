@@ -20,12 +20,22 @@ Trigger installation of the plugin via
 cf install-plugin -r CF-Community "java"
 ```
 
+The releases in the community repository might be older that the actual releases on GitHub, that you
+can install manually.
+
 ### Manual Installation
-Download the binary file for your target OS from the [latest release](https://github.com/SAP/cf-cli-java-plugin/releases/latest).
+Download the latest release from [GitHub](https://github.com/SAP/cf-cli-java-plugin/releases/latest).
 
-If you've already installed the plugin and are updating it, you must first execute the `cf uninstall-plugin java` command.
+To install a new version of the plugin, run the following:
 
-Install the plugin with `cf install-plugin [cf-cli-java-plugin]` (replace `[cf-cli-java-plugin]` with the actual binary name you will use, which depends on the OS you are running).
+```sh
+# on Mac arm64
+cf install-plugin -f https://github.com/SAP/cf-cli-java-plugin/releases/latest/download/cf-cli-java-plugin-macos-arm64
+# on Windows x86
+cf install-plugin -f https://github.com/SAP/cf-cli-java-plugin/releases/latest/download/cf-cli-java-plugin-windows-amd64
+# on Linux x86
+cf install-plugin -f https://github.com/SAP/cf-cli-java-plugin/releases/latest/download/cf-cli-java-plugin-linux-amd64
+```
 
 You can verify that the plugin is successfully installed by looking for `java` in the output of `cf plugins`.
 
@@ -109,14 +119,29 @@ USAGE:
      vm-info
         Print information about the Java Virtual Machine running a Java application
 
-     jcmd
+     jcmd (supports --args)
         Run a JCMD command on a running Java application via --args
 
-     start-jfr
-        Start a Java Flight Recorder recording on a running Java application (additional options via --args)
+     jfr-start
+        Start a Java Flight Recorder default recording on a running Java application
 
-     stop-jfr
-        Stop a Java Flight Recorder recording on a running Java application (additional options via --args)
+     jfr-start-profile
+        Start a Java Flight Recorder profile recording on a running Java application
+
+     jfr-start-gc (recent SapMachine only)
+        Start a Java Flight Recorder GC recording on a running Java application
+
+     jfr-start-gc-details (recent SapMachine only)
+        Start a Java Flight Recorder detailed GC recording on a running Java application
+
+     jfr-stop
+        Stop a Java Flight Recorder recording on a running Java application
+
+     jfr-dump
+        Dump a Java Flight Recorder recording on a running Java application without stopping it
+
+     jfr-status
+        Check the running Java Flight Recorder recording on a running Java application
 
      vm-version
         Print the version of the Java Virtual Machine running a Java application
@@ -124,31 +149,41 @@ USAGE:
      vm-vitals
         Print vital statistics about the Java Virtual Machine running a Java application
 
-     asprof (recent SapMachine only)
+     asprof (recent SapMachine only, supports --args)
         Run async-profiler commands passed to asprof via --args
 
-     asprof-status
+     asprof-start-cpu (recent SapMachine only)
+        Start an async-profiler CPU-time profile recording on a running Java application
+
+     asprof-start-wall (recent SapMachine only)
+        Start an async-profiler wall-clock profile recording on a running Java application
+
+     asprof-start-alloc (recent SapMachine only)
+        Start an async-profiler allocation profile recording on a running Java application
+
+     asprof-start-lock (recent SapMachine only)
+        Start an async-profiler lock profile recording on a running Java application
+
+     asprof-stop (recent SapMachine only)
+        Stop an async-profiler profile recording on a running Java application
+
+     asprof-dump (recent SapMachine only)
+        Dump an async-profiler profile recording without stopping it
+
+     asprof-status (recent SapMachine only)
         Get the status of async-profiler on a running Java application
 
-     start-asprof (recent SapMachine only)
-        Start async-profiler profiling on a running Java application (additional options via --args)
-
-     start-asprof-cpu-profile (recent SapMachine only)
-        Start async-profiler CPU profiling on a running Java application (additional options via --args)
-
-     start-asprof-wall-clock-profile (recent SapMachine only)
-        Start async-profiler wall-clock profiling on a running Java application (additional options via --args)
-
-     stop-asprof
-        Stop async-profiler profiling on a running Java application (additional options via --args)
-
 OPTIONS:
-   -args                     -a, Miscellaneous arguments to pass to the command in the container, be aware to end it with a space if it is a simple option
-   -container-dir            -cd, the directory path in the container that the heap dump/JFR/... file will be saved to
-   -dry-run                  -n, just output to command line what would be executed
-   -keep                     -k, keep the heap dump in the container; by default the heap dump/JFR/... will be deleted from the container's filesystem after been downloaded
-   -local-dir                -ld, the local directory path that the dump/JFR/... file will be saved to
-   -app-instance-index       -i [index], select to which instance of the app to connect
+   --app-instance-index      -i [index], select to which instance of the app to connect
+   --args                    -a, Miscellaneous arguments to pass to the command (if supported) 
+                                 in the container, be aware to end it with a space if it is a simple option
+   --container-dir           -cd, the directory path in the container that the heap dump/JFR/... file  
+                                  will be saved to
+   --dry-run                 -n, just output to command line what would be executed
+   --keep                    -k, keep the heap dump in the container; by default the heap dump/JFR/...
+                                 will be deleted from the container's filesystem after been downloaded
+   --local-dir               -ld, the local directory path that the dump/JFR/... file will be saved to
+                                 defaults to the current directory
 </pre>
 
 The heap dumps and profiles will be copied to a local file if `-local-dir` is specified as a full folder path. Without providing `-local-dir` the heap dump will only be created in the container and not transferred.

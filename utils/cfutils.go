@@ -256,5 +256,13 @@ func (checker CfJavaPluginUtilImpl) ListFiles(args []string, path string) ([]str
 	if err != nil {
 		return nil, errors.New("error occured while listing files: " + string(output[:]))
 	}
-	return strings.Split(strings.Trim(string(output[:]), "\n"), "\n"), nil
+	files := strings.Split(strings.Trim(string(output[:]), "\n"), "\n")
+	// filter all empty strings
+	for i := 0; i < len(files); i++ {
+		if len(files[i]) == 0 {
+			files = append(files[:i], files[i+1:]...)
+			i--
+		}
+	}
+	return files, nil
 }

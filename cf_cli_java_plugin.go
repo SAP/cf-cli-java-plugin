@@ -120,8 +120,13 @@ type Command struct {
 	FileLabel     string
 	FileNamePart  string
 	// Run the command in a subfolder of the container
-	GenerateArbitraryFiles  bool
+	GenerateArbitraryFiles           bool
 	GenerateArbitraryFilesFolderName string
+}
+
+// function names "HasMiscArgs" that is used on Command and checks whethere the SSHCommand contains $$ARGS
+func (c *Command) HasMiscArgs() bool {
+	return strings.Contains(c.SshCommand, "$$ARGS")
 }
 
 var commands = []Command{
@@ -182,21 +187,61 @@ fi`,
 		SshCommand:    `$JCMD_COMMAND $(pidof java) $$ARGS`,
 	},
 	{
-		Name:          "start-jfr",
-		Description:   "Start a Java Flight Recorder recording on a running Java application (additional options via --args)",
+		Name:          "jfr-start",
+		Description:   "Start a Java Flight Recorder default recording on a running Java application",
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
-		SshCommand:    `$JCMD_COMMAND $(pidof java) JFR.start $$ARGS; echo "Use 'cf java stop-jfr $$APP_NAME --local-dir .' to copy the file"`,
+		SshCommand:    `$JCMD_COMMAND $(pidof java) JFR.start settings=profile.jfc; echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
 	},
 	{
-		Name:          "stop-jfr",
-		Description:   "Stop a Java Flight Recorder recording on a running Java application (additional options via --args)",
+		Name:          "jfr-start-profile",
+		Description:   "Start a Java Flight Recorder profile recording on a running Java application",
+		RequiredTools: []string{"jcmd"},
+		GenerateFiles: false,
+		SshCommand:    `$JCMD_COMMAND $(pidof java) JFR.start settings=profile.jfc; echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
+	},
+	{
+		Name:                   "jfr-start-gc",
+		Description:            "Start a Java Flight Recorder GC recording on a running Java application",
+		RequiredTools:          []string{"jcmd"},
+		GenerateFiles:          false,
+		OnlyOnRecentSapMachine: true,
+		SshCommand:             `$JCMD_COMMAND $(pidof java) JFR.start settings=gc.jfc; echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
+	},
+	{
+		Name:                   "jfr-start-gc-details",
+		Description:            "Start a Java Flight Recorder detailed GC recording on a running Java application",
+		RequiredTools:          []string{"jcmd"},
+		GenerateFiles:          false,
+		OnlyOnRecentSapMachine: true,
+		SshCommand:             `$JCMD_COMMAND $(pidof java) JFR.start settings=gc_details.jfc; echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
+	},
+	{
+		Name:          "jfr-stop",
+		Description:   "Stop a Java Flight Recorder recording on a running Java application",
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: true,
 		FileExtension: ".jfr",
 		FileLabel:     "JFR recording",
 		FileNamePart:  "jfr",
-		SshCommand:    `$JCMD_COMMAND $(pidof java) JFR.dump fileName=$$FILE_NAME $$ARGS; $JCMD_COMMAND $(pidof java) JFR.stop`,
+		SshCommand:    `$JCMD_COMMAND $(pidof java) JFR.stop filename=$$FILE_NAME; $JCMD_COMMAND $(pidof java) JFR.stop`,
+	},
+	{
+		Name:          "jfr-dump",
+		Description:   "Dump a Java Flight Recorder recording on a running Java application without stopping it",
+		RequiredTools: []string{"jcmd"},
+		GenerateFiles: true,
+		FileExtension: ".jfr",
+		FileLabel:     "JFR recording",
+		FileNamePart:  "jfr",
+		SshCommand:    `$JCMD_COMMAND $(pidof java) JFR.dump filename=$$FILE_NAME; $JCMD_COMMAND $(pidof java) JFR.stop`,
+	},
+	{
+		Name:          "jfr-status",
+		Description:   "Check the running Java Flight Recorder recording on a running Java application",
+		RequiredTools: []string{"jcmd"},
+		GenerateFiles: false,
+		SshCommand:    `$JCMD_COMMAND $(pidof java) JFR.check`,
 	},
 	{
 		Name:          "vm-version",
@@ -213,64 +258,88 @@ fi`,
 		SshCommand:    `$JCMD_COMMAND $(pidof java) VM.vitals`,
 	},
 	{
-		Name:                   "asprof",
-		Description:            "Run async-profiler commands passed to asprof via --args",
-		OnlyOnRecentSapMachine: true,
-		RequiredTools:          []string{"asprof"},
-		GenerateFiles:          false,
+		Name:                             "asprof",
+		Description:                      "Run async-profiler commands passed to asprof via --args",
+		OnlyOnRecentSapMachine:           true,
+		RequiredTools:                    []string{"asprof"},
+		GenerateFiles:                    false,
 		GenerateArbitraryFiles:           true,
 		GenerateArbitraryFilesFolderName: "asprof",
-		SshCommand:             `$ASPROF_COMMAND $(pidof java) $$ARGS`,
+		SshCommand:                       `$ASPROF_COMMAND $(pidof java) $$ARGS`,
 	},
 	{
-		Name:          "asprof-status",
-		Description:   "Get the status of async-profiler on a running Java application",
-		RequiredTools: []string{"asprof"},
-		GenerateFiles: false,
-		SshCommand:    `$ASPROF_COMMAND status $(pidof java) $$ARGS`,
-	},
-	{
-		Name:                   "start-asprof",
-		Description:            "Start async-profiler profiling on a running Java application (additional options via --args)",
+		Name:                   "asprof-start-cpu",
+		Description:            "Start an async-profiler CPU-time profile recording on a running Java application",
 		OnlyOnRecentSapMachine: true,
 		RequiredTools:          []string{"asprof"},
 		GenerateFiles:          false,
 		NeedsFileName:          true,
 		FileExtension:          ".jfr",
 		FileNamePart:           "asprof",
-		SshCommand:             `$ASPROF_COMMAND start $(pidof java) $$ARGS -f $$FILE_NAME`,
+		SshCommand:             `$ASPROF_COMMAND start $(pidof java) -e cpu -f $$FILE_NAME; echo "Use 'cf java asprof-stop $$APP_NAME' to copy the file to the local folder"`,
 	},
 	{
-		Name:                   "start-asprof-cpu-profile",
-		Description:            "Start async-profiler CPU profiling on a running Java application (additional options via --args)",
+		Name:                   "asprof-start-wall",
+		Description:            "Start an async-profiler wall-clock profile recording on a running Java application",
 		OnlyOnRecentSapMachine: true,
 		RequiredTools:          []string{"asprof"},
 		GenerateFiles:          false,
 		NeedsFileName:          true,
 		FileExtension:          ".jfr",
 		FileNamePart:           "asprof",
-		SshCommand:             `$ASPROF_COMMAND start $$ARGS -f $$FILE_NAME -e cpu $(pidof java)`,
+		SshCommand:             `$ASPROF_COMMAND start $(pidof java) -e wall -f $$FILE_NAME; echo "Use 'cf java asprof-stop $$APP_NAME' to copy the file to the local folder"`,
 	},
 	{
-		Name:                   "start-asprof-wall-clock-profile",
-		Description:            "Start async-profiler wall-clock profiling on a running Java application (additional options via --args)",
+		Name:                   "asprof-start-alloc",
+		Description:            "Start an async-profiler allocation profile recording on a running Java application",
 		OnlyOnRecentSapMachine: true,
 		RequiredTools:          []string{"asprof"},
 		GenerateFiles:          false,
 		NeedsFileName:          true,
 		FileExtension:          ".jfr",
 		FileNamePart:           "asprof",
-		SshCommand:             `$ASPROF_COMMAND start $$ARGS -f $$FILE_NAME -e wall $(pidof java)`,
+		SshCommand:             `$ASPROF_COMMAND start $(pidof java) -e alloc -f $$FILE_NAME; echo "Use 'cf java asprof-stop $$APP_NAME' to copy the file to the local folder"`,
 	},
 	{
-		Name:          "stop-asprof",
-		Description:   "Stop async-profiler profiling on a running Java application (additional options via --args)",
-		RequiredTools: []string{"asprof"},
-		GenerateFiles: true,
-		FileExtension: ".jfr",
-		FileLabel:     "JFR recording",
-		FileNamePart:  "asprof",
-		SshCommand:    `$ASPROF_COMMAND stop $$ARGS $(pidof java)`,
+		Name:                   "asprof-start-lock",
+		Description:            "Start an async-profiler lock profile recording on a running Java application",
+		OnlyOnRecentSapMachine: true,
+		RequiredTools:          []string{"asprof"},
+		GenerateFiles:          false,
+		NeedsFileName:          true,
+		FileExtension:          ".jfr",
+		FileNamePart:           "asprof",
+		SshCommand:             `$ASPROF_COMMAND start $(pidof java) -e lock -f $$FILE_NAME; echo "Use 'cf java asprof-stop $$APP_NAME' to copy the file to the local folder"`,
+	},
+	{
+		Name:                   "asprof-stop",
+		Description:            "Stop an async-profiler profile recording on a running Java application",
+		RequiredTools:          []string{"asprof"},
+		OnlyOnRecentSapMachine: true,
+		GenerateFiles:          true,
+		FileExtension:          ".jfr",
+		FileLabel:              "JFR recording",
+		FileNamePart:           "asprof",
+		SshCommand:             `$ASPROF_COMMAND stop $(pidof java)`,
+	},
+	{
+		Name:                   "asprof-dump",
+		Description:            "Dump an async-profiler profile recording without stopping it",
+		RequiredTools:          []string{"asprof"},
+		OnlyOnRecentSapMachine: true,
+		GenerateFiles:          true,
+		FileExtension:          ".jfr",
+		FileLabel:              "JFR recording",
+		FileNamePart:           "asprof",
+		SshCommand:             `$ASPROF_COMMAND dump $(pidof java)`,
+	},
+	{
+		Name:                   "asprof-status",
+		Description:            "Get the status of async-profiler on a running Java application",
+		RequiredTools:          []string{"asprof"},
+		OnlyOnRecentSapMachine: true,
+		GenerateFiles:          false,
+		SshCommand:             `$ASPROF_COMMAND status $(pidof java)`,
 	},
 }
 
@@ -309,7 +378,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	commandFlags.NewBoolFlag("keep", "k", "whether to `keep` the heap-dump/JFR/... files on the container of the application instance after having downloaded it locally")
 	commandFlags.NewBoolFlag("dry-run", "n", "triggers the `dry-run` mode to show only the cf-ssh command that would have been executed")
 	commandFlags.NewStringFlag("container-dir", "cd", "specify the folder path where the dump/JFR/... file should be stored in the container")
-	commandFlags.NewStringFlag("local-dir", "ld", "specify the folder where the dump/JFR/... file will be downloaded to, dump file wil not be copied to local if this parameter  was not set")
+	commandFlags.NewStringFlag("local-dir", "ld", "specify the folder where the dump/JFR/... file will be downloaded to, dump file wil not be copied to local if this parameter was not set")
 	commandFlags.NewStringFlag("args", "a", "Miscellaneous arguments to pass to the command in the container, be aware to end it with a space if it is a simple option")
 
 	fileFlags := []string{"container-dir", "local-dir", "keep"}
@@ -329,8 +398,9 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 	remoteDir := commandFlags.String("container-dir")
 	localDir := commandFlags.String("local-dir")
-
-	copyToLocal := len(localDir) > 0
+	if localDir == "" {
+		localDir = "."
+	}
 
 	arguments := commandFlags.Args()
 	argumentLen := len(arguments)
@@ -364,7 +434,9 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			}
 		}
 	}
-
+	if !command.HasMiscArgs() && commandFlags.IsSet("args") {
+		return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for %s", "args", command.Name)}
+	}
 	if argumentLen == 1 {
 		return "", &InvalidUsageError{message: "No application name provided"}
 	} else if argumentLen > 2 {
@@ -419,7 +491,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		if command.GenerateArbitraryFiles {
 			// prepend 'mkdir -p $$FSPATH' to the command to create the directory if it does not exist
 			remoteCommandTokens = append([]string{"mkdir -p " + fspath}, remoteCommandTokens...)
-			remoteCommandTokens = append(remoteCommandTokens, "cd " + fspath)
+			remoteCommandTokens = append(remoteCommandTokens, "cd "+fspath)
 		}
 	}
 
@@ -460,22 +532,15 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			fmt.Println("Successfully created " + command.FileLabel + " in application container at: " + fileName)
 		} else {
 			fmt.Println("Failed to find " + command.FileLabel + " in application container")
-			fmt.Println(finalFile)
-			fmt.Println(fileName)
-			fmt.Println(fspath)
 			return "", err
 		}
 
-		if copyToLocal {
-			localFileFullPath := localDir + "/" + applicationName + "-" + command.FileNamePart + "-" + uuidGenerator.Generate() + command.FileExtension
-			err = util.CopyOverCat(cfSSHArguments, fileName, localFileFullPath)
-			if err == nil {
-				fmt.Println(toSentenceCase(command.FileLabel) + " file saved to: " + localFileFullPath)
-			} else {
-				return "", err
-			}
+		localFileFullPath := localDir + "/" + applicationName + "-" + command.FileNamePart + "-" + uuidGenerator.Generate() + command.FileExtension
+		err = util.CopyOverCat(cfSSHArguments, fileName, localFileFullPath)
+		if err == nil {
+			fmt.Println(toSentenceCase(command.FileLabel) + " file saved to: " + localFileFullPath)
 		} else {
-			fmt.Println(toSentenceCase(command.FileLabel) + " will not be copied as parameter `local-dir` was not set")
+			return "", err
 		}
 
 		if !keepAfterDownload {
@@ -483,7 +548,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			if err != nil {
 				return "", err
 			}
-			fmt.Println(toSentenceCase(command.FileLabel) + " file deleted in app container")
+			fmt.Println(toSentenceCase(command.FileLabel) + " file deleted in application container")
 		}
 	}
 	if command.GenerateArbitraryFiles {
@@ -492,7 +557,8 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		if err != nil {
 			return "", err
 		}
-		if copyToLocal {
+		if len(files) != 0 {
+			fmt.Println("Files in the folder: ", files)
 			for _, file := range files {
 				localFileFullPath := localDir + "/" + file
 				err = util.CopyOverCat(cfSSHArguments, fspath+"/"+file, localFileFullPath)
@@ -502,16 +568,14 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 					return "", err
 				}
 			}
-		} else {
-			fmt.Println(toSentenceCase(command.FileLabel) + " will not be copied as parameter `local-dir` was not set")
-		}
 
-		if !keepAfterDownload {
-			err = util.DeleteRemoteFile(cfSSHArguments, fspath)
-			if err != nil {
-				return "", err
+			if !keepAfterDownload {
+				err = util.DeleteRemoteFile(cfSSHArguments, fspath)
+				if err != nil {
+					return "", err
+				}
+				fmt.Println("File folder deleted in application container")
 			}
-			fmt.Println("File folder deleted in app container")
 		}
 	}
 	// We keep this around to make the compiler happy, but commandExecutor.Execute will cause an os.Exit
@@ -534,8 +598,18 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 	var usageText = "cf java COMMAND APP_NAME [options]"
 	for _, command := range commands {
 		usageText += "\n\n     " + command.Name
-		if command.OnlyOnRecentSapMachine {
-			usageText += " (recent SapMachine only)"
+		if command.OnlyOnRecentSapMachine || command.HasMiscArgs() {
+			usageText += " ("
+			if command.OnlyOnRecentSapMachine {
+				usageText += "recent SapMachine only"
+			}
+			if command.HasMiscArgs() {
+				if command.OnlyOnRecentSapMachine {
+					usageText += ", "
+				}
+				usageText += "supports --args"
+			}
+			usageText += ")"
 		}
 		usageText += "\n        " + command.Description
 	}
@@ -565,8 +639,8 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 						"keep":               "-k, keep the heap dump in the container; by default the heap dump/JFR/... will be deleted from the container's filesystem after been downloaded",
 						"dry-run":            "-n, just output to command line what would be executed",
 						"container-dir":      "-cd, the directory path in the container that the heap dump/JFR/... file will be saved to",
-						"local-dir":          "-ld, the local directory path that the dump/JFR/... file will be saved to",
-						"args":               "-a, Miscellaneous arguments to pass to the command in the container, be aware to end it with a space if it is a simple option",
+						"local-dir":          "-ld, the local directory path that the dump/JFR/... file will be saved to, defaults to the current directory",
+						"args":               "-a, Miscellaneous arguments to pass to the command (if supported) in the container, be aware to end it with a space if it is a simple option",
 					},
 				},
 			},
