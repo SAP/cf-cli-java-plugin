@@ -117,8 +117,8 @@ var _ = Describe("CfJavaPlugin", func() {
 				})
 
 				Expect(output).To(BeEmpty())
-				Expect(err.Error()).To(ContainSubstring("Unrecognized command \"UNKNOWN_COMMAND\": supported commands"))
-				Expect(cliOutput).To(ContainSubstring("Unrecognized command \"UNKNOWN_COMMAND\": supported commands"))
+				Expect(err.Error()).To(ContainSubstring("Unrecognized command \"UNKNOWN_COMMAND\", did you mean:"))
+				Expect(cliOutput).To(ContainSubstring("Unrecognized command \"UNKNOWN_COMMAND\", did you mean:"))
 
 				Expect(commandExecutor.ExecuteCallCount()).To(Equal(1))
 				Expect(commandExecutor.ExecuteArgsForCall(0)).To(Equal([]string{"help", "java"}))

@@ -8,8 +8,6 @@ import (
 	"os/exec"
 	"strings"
 	"slices"
-	"sort"
-	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
 type CfJavaPluginUtilImpl struct {
@@ -118,9 +116,8 @@ func (checker CfJavaPluginUtilImpl) FindReasonForAccessError(app string) string 
 	if slices.Contains(appNames, app) {
 		return "Problems accessing the app " + app
 	}
-	matches := fuzzy.RankFind(app, appNames)
-	sort.Sort(matches)
-	return "Could not find " + app + ". Did you mean " + matches[0].Target + "?"
+	matches := FuzzySearch(app, appNames, 1)
+	return "Could not find " + app + ". Did you mean " + matches[0] + "?"
 }
 func (checker CfJavaPluginUtilImpl) CheckRequiredTools(app string) (bool, error) {
 	guid, err := exec.Command("cf", "app", app, "--guid").Output()

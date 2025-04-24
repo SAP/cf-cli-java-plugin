@@ -22,10 +22,8 @@ import (
 
 	"utils"
 
-	"github.com/lithammer/fuzzysearch/fuzzy"
 	guuid "github.com/satori/go.uuid"
 	"github.com/simonleung8/flags"
-	"sort"
 )
 
 // The JavaPlugin is a cf cli plugin that supports taking heap and thread dumps on demand
@@ -414,18 +412,8 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		for _, command := range commands {
 			avCommands = append(avCommands, command.Name)
 		}
-		matches := fuzzy.RankFind(commandName, avCommands)
-		sort.Sort(matches)
-		matchedCommands := make([]string, 0, 3)
-		// first three matches
-		for i := 0; i < 3 && i < len(matches); i++ {
-			matchedCommands = append(matchedCommands, matches[i].Target)
-		}
-		// concat with or at the end
-		if len(matchedCommands) > 1 {
-			matchedCommands[len(matchedCommands)-1] = "or " + matchedCommands[len(matchedCommands)-1]
-		}
-		return "", &InvalidUsageError{message: fmt.Sprintf("Unrecognized command %q, did you mean: %s?", commandName, strings.Join(matchedCommands, ", "))}
+		matches := utils.FuzzySearch(commandName, avCommands, 3)
+		return "", &InvalidUsageError{message: fmt.Sprintf("Unrecognized command %q, did you mean: %s?", commandName, utils.JoinWithOr(matches))}
 	}
 
 	command := commands[index]
