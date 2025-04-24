@@ -259,7 +259,7 @@ fi`,
 	},
 	{
 		Name:                             "asprof",
-		Description:                      "Run async-profiler commands passed to asprof via --args, copies files in the current folder. Don't use in combination with asprof-* commands. Downloads and deletes all files that are created in the current folder, use '--no-download' to prevent this",
+		Description:                      "Run async-profiler commands passed to asprof via --args, copies files in the current folder. Don't use in combination with asprof-* commands. Downloads and deletes all files that are created in the current folder, if not using 'start' asprof command, use '--no-download' to prevent this.",
 		OnlyOnRecentSapMachine:           true,
 		RequiredTools:                    []string{"asprof"},
 		GenerateFiles:                    false,
@@ -426,6 +426,14 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			}
 		}
 	}
+	if command.Name == "asprof" {
+		trimmedMiscArgs := strings.TrimLeft(miscArgs, " ")
+		if len(trimmedMiscArgs) > 6 && trimmedMiscArgs[:6] == "start " {
+			noDownload = true
+		} else {
+			noDownload = trimmedMiscArgs == "start";
+		}
+	}
 	if !command.HasMiscArgs() && commandFlags.IsSet("args") {
 		return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for %s", "args", command.Name)}
 	}
@@ -550,7 +558,6 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			return "", err
 		}
 		if len(files) != 0 {
-			fmt.Println("Files in the folder: ", files)
 			for _, file := range files {
 				localFileFullPath := localDir + "/" + file
 				err = util.CopyOverCat(cfSSHArguments, fspath+"/"+file, localFileFullPath)
