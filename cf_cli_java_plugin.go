@@ -181,7 +181,7 @@ fi`,
 	},
 	{
 		Name:          "jcmd",
-		Description:   "Run a JCMD command on a running Java application via --args",
+		Description:   "Run a JCMD command on a running Java application via --args, downloads and deletes all files that are created in the current folder, use '--no-download' to prevent this",
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
 		SshCommand:    `$JCMD_COMMAND $(pidof java) $$ARGS`,
@@ -259,13 +259,13 @@ fi`,
 	},
 	{
 		Name:                             "asprof",
-		Description:                      "Run async-profiler commands passed to asprof via --args",
+		Description:                      "Run async-profiler commands passed to asprof via --args, copies files in the current folder. Don't use in combination with asprof-* commands. Downloads and deletes all files that are created in the current folder, use '--no-download' to prevent this",
 		OnlyOnRecentSapMachine:           true,
 		RequiredTools:                    []string{"asprof"},
 		GenerateFiles:                    false,
 		GenerateArbitraryFiles:           true,
 		GenerateArbitraryFilesFolderName: "asprof",
-		SshCommand:                       `$ASPROF_COMMAND $(pidof java) $$ARGS`,
+		SshCommand:                       `$ASPROF_COMMAND $(pidof java) $$ARGS || true`,
 	},
 	{
 		Name:                   "asprof-start-cpu",
@@ -365,6 +365,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 	commandFlags.NewIntFlagWithDefault("app-instance-index", "i", "application `instance` to connect to", -1)
 	commandFlags.NewBoolFlag("keep", "k", "whether to `keep` the heap-dump/JFR/... files on the container of the application instance after having downloaded it locally")
+	commandFlags.NewBoolFlag("no-download", "nd", "do not download the heap-dump/JFR/... file to the local machine")
 	commandFlags.NewBoolFlag("dry-run", "n", "triggers the `dry-run` mode to show only the cf-ssh command that would have been executed")
 	commandFlags.NewStringFlag("container-dir", "cd", "specify the folder path where the dump/JFR/... file should be stored in the container")
 	commandFlags.NewStringFlag("local-dir", "ld", "specify the folder where the dump/JFR/... file will be downloaded to, dump file wil not be copied to local if this parameter was not set")
@@ -383,7 +384,8 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	}
 
 	applicationInstance := commandFlags.Int("app-instance-index")
-	keepAfterDownload := commandFlags.IsSet("keep")
+	noDownload := commandFlags.IsSet("no-download")
+	keepAfterDownload := commandFlags.IsSet("keep") || noDownload
 
 	remoteDir := commandFlags.String("container-dir")
 	localDir := commandFlags.String("local-dir")
@@ -505,7 +507,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 	output, err := commandExecutor.Execute(fullCommand)
 
-	if command.GenerateFiles {
+	if command.GenerateFiles && !noDownload{
 
 		finalFile := ""
 		var err error
@@ -541,7 +543,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			fmt.Println(toSentenceCase(command.FileLabel) + " file deleted in application container")
 		}
 	}
-	if command.GenerateArbitraryFiles {
+	if command.GenerateArbitraryFiles && !noDownload {
 		// download all files in the generic folder
 		files, err := util.ListFiles(cfSSHArguments, fspath)
 		if err != nil {
@@ -626,6 +628,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 					Usage: usageText,
 					Options: map[string]string{
 						"app-instance-index": "-i [index], select to which instance of the app to connect",
+						"no-download":       "-nd, don't download the heap dump/JFR/... file to local, only keep it in the container, implies '--keep'",
 						"keep":               "-k, keep the heap dump in the container; by default the heap dump/JFR/... will be deleted from the container's filesystem after been downloaded",
 						"dry-run":            "-n, just output to command line what would be executed",
 						"container-dir":      "-cd, the directory path in the container that the heap dump/JFR/... file will be saved to",
