@@ -241,3 +241,22 @@ The tests are written using [Ginkgo](https://onsi.github.io/ginkgo/) with [Gomeg
 Unless modifications to the helper interfaces `cmd.CommandExecutor` and `uuid.UUIDGenerator` are needed, there should be no need to regenerate the mocks.
 
 To run the tests, go to the root of the repository and simply run `gingko` (you may need to install Ginkgo first, e.g., `go get github.com/onsi/ginkgo/ginkgo` puts the executable under `$GOPATH/bin`).
+
+## Support, Feedback, Contributing
+
+This project is open to feature requests/suggestions, bug reports etc.
+via [GitHub issues](https://github.com/SAP/cf-cli-java-plugin/issues).
+Contribution and feedback are encouraged and always welcome.
+Just be aware that this plugin is limited in scope to keep it maintainable.
+For more information about how to contribute, the project structure,
+as well as additional contribution information,
+see our [Contribution Guidelines](CONTRIBUTING.md).
+
+## Security / Disclosure
+If you find any bug that may be a security problem, please follow our instructions at
+[in our security policy](https://github.com/SAP/cf-cli-java-plugin/security/policy) on how to report it.
+Please do not create GitHub issues for security-related doubts or problems.
+
+## License
+Copyright 2017 - 2025  SAP SE or an SAP affiliate company and contributors.
+Please see our LICENSE for copyright and license information.
