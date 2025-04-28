@@ -7,7 +7,7 @@ This plugin for the [Cloud Foundry Command Line](https://github.com/cloudfoundry
 Currently, it allows to:
 * Trigger and retrieve a heap dump and a thread dump from an instance of a Cloud Foundry Java application
 * To run jcmd remotely on your application
-* To start, stop and retrieve JFR and async-profiler profiles from your application
+* To start, stop and retrieve JFR and [async-profiler](https://github.com/jvm-profiling-tools/async-profiler) ([SapMachine](https://sapmachine.io) only) profiles from your application
 
 ## Installation
 
@@ -84,7 +84,12 @@ applications:
   buildpack: https://github.com/cloudfoundry/java-buildpack
   env:
     JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/bionic/x86_64", version: 11.+ } }'
+    JAVA_OPTS: '+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints'
 ```
+
+`JAVA_OPTS: '+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints'` is used to improve
+profiling accurary and has no known negative performance impacts.
+
 Please note that this requires the use of an online buildpack (configured in the `buildpack` property). When system buildpacks are used, staging will fail with cache issues, because the system buildpacks don’t have the JDK chached.
 Please also note that this is not to be considered a recommendation to use a full JDK. It's just one option to get the tools required for the use of this plugin when you need it, e.g., for troubleshooting.
 The `version` property is optional and can be used to request a specific Java version.
@@ -102,7 +107,48 @@ If `cf java` is having issues connecting to your app, chances are the problem is
 To verify, run your `cf java` command in "dry-run" mode by adding the `-n` flag and try to execute the command line that `cf java` gives you back.
 If it fails, the issue is not in `cf java`, but in whatever makes `cf ssh` fail.
 
+### Examples
+
+Getting a heap-dump:
+
+```sh
+> cf java heap-dump $APP_NAME
+-> ./$APP_NAME-heapdump-$RANDOM.hprof
+```
+
+Getting a thread-dump:
+
+```sh
+> cf java thread-dump $APP_NAME
+...
+Full thread dump OpenJDK 64-Bit Server VM ...
+...
+```
+
+Creating a CPU-time profile via async-profiler:
+
+```sh
+> cf java asprof-start-cpu $APP_NAME
+Profiling started
+# wait some time to gather data
+> cf java asprof-stop-cpu $APP_NAME
+-> ./$APP_NAME-asprof-$RANDOM.jfr
+```
+
+Running arbitrary JCMD commands, like `VM.uptime`:
+
+```sh
+> cf java jcmd $APP_NAME -a VM.uptime
+Connected to remote JVM
+JVM response code = 0
+$TIME s
+```
+
 ### Commands
+
+The following is a list of all available commands (some of the SapMachine specific),
+generated via `cf java --help`:
+
 <pre>
 NAME:
    java - Obtain a heap-dump, thread-dump or profile from a running, SSH-enabled Java application.
