@@ -57,7 +57,15 @@ func (u uuidGeneratorImpl) Generate() string {
 
 const (
 	// JavaDetectionCommand is the prologue command to detect on the Garden container if it contains a Java app. Visible for tests
-	JavaDetectionCommand = "if ! pgrep -x \"java\" > /dev/null; then echo \"No 'java' process found running. Are you sure this is a Java app?\" >&2; exit 1; fi"
+	JavaDetectionCommand              = "if ! pgrep -x \"java\" > /dev/null; then echo \"No 'java' process found running. Are you sure this is a Java app?\" >&2; exit 1; fi"
+	CheckNoCurrentJFRRecordingCommand = `OUTPUT=$($JCMD_COMMAND $(pidof java) JFR.check 2>&1); if [[ ! "$OUTPUT" == *"No available recording"* ]]; then echo "JFR recording already running. Stop it before starting a new recording."; exit 1; fi;`
+	FilterJCMDRemoteMessage           = `filter_jcmd_remote_message() {
+  if command -v grep >/dev/null 2>&1; then
+    grep -v -e "Connected to remote JVM" -e "JVM response code = 0"
+  else
+    cat  # fallback: just pass through the input unchanged
+  fi
+};`
 )
 
 // Run must be implemented by any plugin because it is part of the
@@ -75,7 +83,9 @@ const (
 func (c *JavaPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 	_, err := c.DoRun(&commandExecutorImpl{cliConnection: cliConnection}, &uuidGeneratorImpl{}, utils.CfJavaPluginUtilImpl{}, args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		if err.Error() != "unexpected EOF" {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		}
 		os.Exit(1)
 	}
 }
@@ -87,6 +97,9 @@ func (c *JavaPlugin) DoRun(commandExecutor cmd.CommandExecutor, uuidGenerator uu
 
 	output, err := c.execute(commandExecutor, uuidGenerator, util, args)
 	if err != nil {
+		if err.Error() == "unexpected EOF" {
+			return output, err
+		}
 		ui.Failed(err.Error())
 
 		if _, invalidUsageErr := err.(*InvalidUsageError); invalidUsageErr {
@@ -113,7 +126,7 @@ type Command struct {
 	RequiredTools []string
 	GenerateFiles bool
 	NeedsFileName bool
-	// use $$FILENAME to get the generated file Name and $$FSPATH to get the path where the file is stored
+	// use $$FILE_NAME to get the generated file Name and $$FSPATH to get the path where the file is stored
 	SshCommand    string
 	FilePattern   string
 	FileExtension string
@@ -177,7 +190,7 @@ fi`,
 		Description:   "Print information about the Java Virtual Machine running a Java application",
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
-		SshCommand:    `$JCMD_COMMAND $(pidof java) VM.info`,
+		SshCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) VM.info | filter_jcmd_remote_message`,
 	},
 	{
 		Name:          "jcmd",
@@ -188,33 +201,57 @@ fi`,
 	},
 	{
 		Name:          "jfr-start",
-		Description:   "Start a Java Flight Recorder default recording on a running Java application",
+		Description:   "Start a Java Flight Recorder default recording on a running Java application (stores in the the container-dir)",
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
-		SshCommand:    `$JCMD_COMMAND $(pidof java) JFR.start settings=profile.jfc; echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
+		NeedsFileName: true,
+		FileExtension: ".jfr",
+		FileLabel:     "JFR recording",
+		FileNamePart:  "jfr",
+		SshCommand: FilterJCMDRemoteMessage + CheckNoCurrentJFRRecordingCommand +
+			`$JCMD_COMMAND $(pidof java) JFR.start settings=default.jfc filename=$$FILE_NAME name=JFR | filter_jcmd_remote_message;
+		echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
 	},
 	{
 		Name:          "jfr-start-profile",
-		Description:   "Start a Java Flight Recorder profile recording on a running Java application",
+		Description:   "Start a Java Flight Recorder profile recording on a running Java application (stores in the the container-dir))",
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
-		SshCommand:    `$JCMD_COMMAND $(pidof java) JFR.start settings=profile.jfc; echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
+		NeedsFileName: true,
+		FileExtension: ".jfr",
+		FileLabel:     "JFR recording",
+		FileNamePart:  "jfr",
+		SshCommand: FilterJCMDRemoteMessage + CheckNoCurrentJFRRecordingCommand +
+			`$JCMD_COMMAND $(pidof java) JFR.start settings=profile.jfc filename=$$FILE_NAME name=JFR | filter_jcmd_remote_message;
+		echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
 	},
 	{
 		Name:                   "jfr-start-gc",
-		Description:            "Start a Java Flight Recorder GC recording on a running Java application",
+		Description:            "Start a Java Flight Recorder GC recording on a running Java application (stores in the the container-dir)",
 		RequiredTools:          []string{"jcmd"},
 		GenerateFiles:          false,
 		OnlyOnRecentSapMachine: true,
-		SshCommand:             `$JCMD_COMMAND $(pidof java) JFR.start settings=gc.jfc; echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
+		NeedsFileName:          true,
+		FileExtension:          ".jfr",
+		FileLabel:              "JFR recording",
+		FileNamePart:           "jfr",
+		SshCommand: FilterJCMDRemoteMessage + CheckNoCurrentJFRRecordingCommand +
+			`$JCMD_COMMAND $(pidof java) JFR.start settings=gc.jfc filename=$$FILE_NAME name=JFR | filter_jcmd_remote_message;
+		echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
 	},
 	{
 		Name:                   "jfr-start-gc-details",
-		Description:            "Start a Java Flight Recorder detailed GC recording on a running Java application",
+		Description:            "Start a Java Flight Recorder detailed GC recording on a running Java application (stores in the the container-dir)",
 		RequiredTools:          []string{"jcmd"},
 		GenerateFiles:          false,
 		OnlyOnRecentSapMachine: true,
-		SshCommand:             `$JCMD_COMMAND $(pidof java) JFR.start settings=gc_details.jfc; echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
+		NeedsFileName:          true,
+		FileExtension:          ".jfr",
+		FileLabel:              "JFR recording",
+		FileNamePart:           "jfr",
+		SshCommand: FilterJCMDRemoteMessage + CheckNoCurrentJFRRecordingCommand +
+			`$JCMD_COMMAND $(pidof java) JFR.start settings=gc_details.jfc filename=$$FILE_NAME name=JFR | filter_jcmd_remote_message;
+		echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
 	},
 	{
 		Name:          "jfr-stop",
@@ -224,7 +261,7 @@ fi`,
 		FileExtension: ".jfr",
 		FileLabel:     "JFR recording",
 		FileNamePart:  "jfr",
-		SshCommand:    `$JCMD_COMMAND $(pidof java) JFR.stop filename=$$FILE_NAME; $JCMD_COMMAND $(pidof java) JFR.stop`,
+		SshCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) JFR.stop name=JFR | filter_jcmd_remote_message`,
 	},
 	{
 		Name:          "jfr-dump",
@@ -234,28 +271,28 @@ fi`,
 		FileExtension: ".jfr",
 		FileLabel:     "JFR recording",
 		FileNamePart:  "jfr",
-		SshCommand:    `$JCMD_COMMAND $(pidof java) JFR.dump filename=$$FILE_NAME; $JCMD_COMMAND $(pidof java) JFR.stop`,
+		SshCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) JFR.dump | filter_jcmd_remote_message`,
 	},
 	{
 		Name:          "jfr-status",
 		Description:   "Check the running Java Flight Recorder recording on a running Java application",
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
-		SshCommand:    `$JCMD_COMMAND $(pidof java) JFR.check`,
+		SshCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) JFR.check | filter_jcmd_remote_message`,
 	},
 	{
 		Name:          "vm-version",
 		Description:   "Print the version of the Java Virtual Machine running a Java application",
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
-		SshCommand:    `$JCMD_COMMAND $(pidof java) VM.version`,
+		SshCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) VM.version | filter_jcmd_remote_message`,
 	},
 	{
 		Name:          "vm-vitals",
 		Description:   "Print vital statistics about the Java Virtual Machine running a Java application",
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
-		SshCommand:    `$JCMD_COMMAND $(pidof java) VM.vitals`,
+		SshCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) VM.vitals | filter_jcmd_remote_message`,
 	},
 	{
 		Name:                             "asprof",
@@ -265,7 +302,7 @@ fi`,
 		GenerateFiles:                    false,
 		GenerateArbitraryFiles:           true,
 		GenerateArbitraryFilesFolderName: "asprof",
-		SshCommand:                       `$ASPROF_COMMAND $(pidof java) $$ARGS || true`,
+		SshCommand:                       `$ASPROF_COMMAND $(pidof java) $$ARGS`,
 	},
 	{
 		Name:                   "asprof-start-cpu",
@@ -431,7 +468,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		if len(trimmedMiscArgs) > 6 && trimmedMiscArgs[:6] == "start " {
 			noDownload = true
 		} else {
-			noDownload = trimmedMiscArgs == "start";
+			noDownload = trimmedMiscArgs == "start"
 		}
 	}
 	if !command.HasMiscArgs() && commandFlags.IsSet("args") {
@@ -515,7 +552,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 	output, err := commandExecutor.Execute(fullCommand)
 
-	if command.GenerateFiles && !noDownload{
+	if command.GenerateFiles && !noDownload {
 
 		finalFile := ""
 		var err error
@@ -635,7 +672,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 					Usage: usageText,
 					Options: map[string]string{
 						"app-instance-index": "-i [index], select to which instance of the app to connect",
-						"no-download":       "-nd, don't download the heap dump/JFR/... file to local, only keep it in the container, implies '--keep'",
+						"no-download":        "-nd, don't download the heap dump/JFR/... file to local, only keep it in the container, implies '--keep'",
 						"keep":               "-k, keep the heap dump in the container; by default the heap dump/JFR/... will be deleted from the container's filesystem after been downloaded",
 						"dry-run":            "-n, just output to command line what would be executed",
 						"container-dir":      "-cd, the directory path in the container that the heap dump/JFR/... file will be saved to",

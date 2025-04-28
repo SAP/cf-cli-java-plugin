@@ -169,16 +169,16 @@ USAGE:
         Run a JCMD command on a running Java application via --args, downloads and deletes all files that are created in the current folder, use '--no-download' to prevent this
 
      jfr-start
-        Start a Java Flight Recorder default recording on a running Java application
+        Start a Java Flight Recorder default recording on a running Java application (stores in the the container-dir)
 
      jfr-start-profile
-        Start a Java Flight Recorder profile recording on a running Java application
+        Start a Java Flight Recorder profile recording on a running Java application (stores in the the container-dir))
 
      jfr-start-gc (recent SapMachine only)
-        Start a Java Flight Recorder GC recording on a running Java application
+        Start a Java Flight Recorder GC recording on a running Java application (stores in the the container-dir)
 
      jfr-start-gc-details (recent SapMachine only)
-        Start a Java Flight Recorder detailed GC recording on a running Java application
+        Start a Java Flight Recorder detailed GC recording on a running Java application (stores in the the container-dir)
 
      jfr-stop
         Stop a Java Flight Recorder recording on a running Java application
@@ -196,7 +196,7 @@ USAGE:
         Print vital statistics about the Java Virtual Machine running a Java application
 
      asprof (recent SapMachine only, supports --args)
-        Run async-profiler commands passed to asprof via --args, copies files in the current folder. Don't use in combination with asprof-* commands. Downloads and deletes all files that are created in the current folder, use '--no-download' to prevent this
+        Run async-profiler commands passed to asprof via --args, copies files in the current folder. Don't use in combination with asprof-* commands. Downloads and deletes all files that are created in the current folder, if not using 'start' asprof command, use '--no-download' to prevent this.
 
      asprof-start-cpu (recent SapMachine only)
         Start an async-profiler CPU-time profile recording on a running Java application
@@ -217,13 +217,13 @@ USAGE:
         Get the status of async-profiler on a running Java application
 
 OPTIONS:
-   -dry-run                  -n, just output to command line what would be executed
-   -keep                     -k, keep the heap dump in the container; by default the heap dump/JFR/... will be deleted from the container's filesystem after been downloaded
    -local-dir                -ld, the local directory path that the dump/JFR/... file will be saved to, defaults to the current directory
    -no-download              -nd, don't download the heap dump/JFR/... file to local, only keep it in the container, implies '--keep'
    -app-instance-index       -i [index], select to which instance of the app to connect
    -args                     -a, Miscellaneous arguments to pass to the command (if supported) in the container, be aware to end it with a space if it is a simple option
    -container-dir            -cd, the directory path in the container that the heap dump/JFR/... file will be saved to
+   -dry-run                  -n, just output to command line what would be executed
+   -keep                     -k, keep the heap dump in the container; by default the heap dump/JFR/... will be deleted from the container's filesystem after been downloaded
 </pre>
 
 The heap dumps and profiles will be copied to a local file if `-local-dir` is specified as a full folder path. Without providing `-local-dir` the heap dump will only be created in the container and not transferred.
