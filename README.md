@@ -84,7 +84,7 @@ applications:
   buildpack: https://github.com/cloudfoundry/java-buildpack
   env:
     JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/bionic/x86_64", version: 11.+ } }'
-    JAVA_OPTS: '+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints'
+    JBP_CONFIG_JAVA_OPTS: "[java_opts: '-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints']"
 ```
 
 `JAVA_OPTS: '+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints'` is used to improve
