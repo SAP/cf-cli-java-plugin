@@ -87,7 +87,7 @@ applications:
     JBP_CONFIG_JAVA_OPTS: "[java_opts: '-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints']"
 ```
 
-`JAVA_OPTS: '+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints'` is used to improve
+`+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints` is used to improve
 profiling accurary and has no known negative performance impacts.
 
 Please note that this requires the use of an online buildpack (configured in the `buildpack` property). When system buildpacks are used, staging will fail with cache issues, because the system buildpacks don’t have the JDK chached.
