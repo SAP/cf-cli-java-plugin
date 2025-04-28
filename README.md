@@ -248,26 +248,27 @@ The `-k` flag is invalid when invoking non file producing commands.
 ## Limitations
 
 The capability of creating heap dumps and profiles is also limited by the filesystem available to the container.
-The `cf java heap-dump` command triggers the heap dump to file system, read the content of the file over the SSH connection, and then remove the heap dump file from the container's file system (unless you have the `-k` flag set).
+The `cf java heap-dump`, `cf java asprof-stop` and `cf java jfr-stop` commands trigger a write to the file system, read the content of the file over the SSH connection, and then remove the file from the container's file system (unless you have the `-k` flag set).
 The amount of filesystem space available to a container is set for the entire Cloud Foundry landscape with a global configuration.
-The size of a heap dump is roughly linear with the allocated memory of the heap.
-So, it could be that, in case of large heaps or the filesystem having too much stuff in it, there is not enough space on the filesystem for creating the heap dump.
-In that case, the creation of the heap dump and thus the command will fail.
-The same is true for stopping and thereby retrieving
-profiles.
+The size of a heap dump is roughly linear with the allocated memory of the heap and the size of the profile is related to the length of the recording.
+So, it could be that, in case of large heaps, long profiling durations or the filesystem having too much stuff in it, there is not enough space on the filesystem for creating the file.
+In that case, the creation of the heap dump or profile recording and thus the command will fail.
 
 From the perspective of integration in workflows and overall shell-friendliness, the `cf java` plugin suffers from some shortcomings in the current `cf-cli` plugin framework:
 * There is no distinction between `stdout` and `stderr` output from the underlying `cf ssh` command (see [this issue on the `cf-cli` project](https://github.com/cloudfoundry/cli/issues/1074))
-  * The `cf java` will however exit with status code `1` when the underpinning `cf ssh` command fails
+  * The `cf java` will however (mostly) exit with status code `1` when the underpinning `cf ssh` command fails
   * If split between `stdout` and `stderr` is needed, you can run the `cf java` plugin in dry-run mode (`--dry-run` flag) and execute its output instead
-* The plugin is not current capability of storing output directly to file (see [this issue on the `cf-cli` project](https://github.com/cloudfoundry/cli/issues/1069))
-  * The upstream change needed to fix this issue has been scheduled at Pivotal; when they provide the new API we need, we'll update the `cf java` command to save output to file.
 
 ## Side-effects on the running instance
 
+Storing dumps or profile recordings to the filesystem may lead to to not enough space on the filesystem been available for other tasks (e.g., temp files).
+In that case, the application in the container may suffer unexpected errors.
+
+### Thread-Dumps
 Executing a thread dump via the `cf java` command does not have much of an overhead on the affected JVM.
 (Unless you have **a lot** of threads, that is.)
 
+### Heap-Dumps
 Heap dumps, on the other hand, have to be treated with a little more care.
 First of all, triggering the heap dump of a JVM makes the latter execute in most cases a full garbage collection, which will cause your JVM to become unresponsive for the duration.
 How much time is needed to execute the heap dump, depends on the size of the heap (the bigger, the slower), the algorithm used and, above all, whether your container is swapping memory to disk or not (swap is *bad* for the JVM).
@@ -275,11 +276,9 @@ Since Cloud Foundry allows for over-commit in its cells, it is possible that a c
 (To be fair, it could be swapping even *before* the garbage collection begins, but let's not knit-pick here.)
 So, it is theoretically possible that execuing a heap dump on a JVM in poor status of health will make it go even worse.
 
+### Profiles
 Profiles might cause overhead depending on the configuration, but the default configurations
 typically have a limited overhead.
-
-Secondly, as the JVMs output heap dumps to the filesystem, creating a heap dump may lead to to not enough space on the filesystem been available for other tasks (e.g., temp files).
-In that case, the application in the container may suffer unexpected errors.
 
 ## Tests and Mocking
 
