@@ -11,18 +11,6 @@ Currently, it allows to:
 
 ## Installation
 
-### Installation via CF Community Repository
-
-Make sure you have the CF Community plugin repository configured or add it via (```cf add-plugin-repo CF-Community http://plugins.cloudfoundry.org```)
-
-Trigger installation of the plugin via
-```
-cf install-plugin -r CF-Community "java"
-```
-
-The releases in the community repository might be older that the actual releases on GitHub, that you
-can install manually.
-
 ### Manual Installation
 Download the latest release from [GitHub](https://github.com/SAP/cf-cli-java-plugin/releases/latest).
 
@@ -38,6 +26,18 @@ cf install-plugin -f https://github.com/SAP/cf-cli-java-plugin/releases/latest/d
 ```
 
 You can verify that the plugin is successfully installed by looking for `java` in the output of `cf plugins`.
+
+### Installation via CF Community Repository
+
+Make sure you have the CF Community plugin repository configured or add it via (```cf add-plugin-repo CF-Community http://plugins.cloudfoundry.org```)
+
+Trigger installation of the plugin via
+```
+cf install-plugin -r CF-Community "java"
+```
+
+The releases in the community repository are older that the actual releases on GitHub, that you can install manually, so we recommend
+the manual installation.
 
 ### Manual Installation of Snapshot Release
 
@@ -301,6 +301,13 @@ see our [Contribution Guidelines](CONTRIBUTING.md).
 If you find any bug that may be a security problem, please follow our instructions at
 [in our security policy](https://github.com/SAP/cf-cli-java-plugin/security/policy) on how to report it.
 Please do not create GitHub issues for security-related doubts or problems.
+
+## Changelog
+
+### 4.0.0-rc
+
+- Profiling and JCMD related features
+- Large refactoring
 
 ## License
 Copyright 2017 - 2025  SAP SE or an SAP affiliate company and contributors.
