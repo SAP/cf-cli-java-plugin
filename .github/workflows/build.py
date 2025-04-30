@@ -4,9 +4,10 @@ import platform
 os.makedirs('dist', exist_ok=True)
 
 os_name_map = {
-    "Darwin": "macos",
-    "Linux": "linux",
-    "Windows": "windows"
+    "darwin": "macos",
+    "linux": "linux",
+    "ubuntu": "linux",
+    "windows": "windows"
 }
 arch_map = {
     "x86_64": "amd64",
@@ -14,7 +15,7 @@ arch_map = {
     "aarch64": "arm64",
     "amd64": "amd64"
 }
-os_name = os_name_map[platform.system()]
+os_name = os_name_map[platform.system().lower()]
 arch = arch_map[platform.machine().lower()]
 print(f"Building for {os_name} {arch}")
 
