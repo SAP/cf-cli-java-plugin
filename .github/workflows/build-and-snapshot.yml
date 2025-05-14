@@ -42,6 +42,12 @@ jobs:
       - name: Build binary
         run: python3 .github/workflows/build.py
   
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cf-cli-java-plugin-${{ matrix.os }}
+          path: dist/
+
       - name: Install cf
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -64,14 +70,9 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.os == 'ubuntu-latest'
         with:
-          name: script.sh
+          name: script
           path: dist/
-  
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: cf-cli-java-plugin-${{ matrix.os }}
-          path: dist/
+
 
 
   release:
