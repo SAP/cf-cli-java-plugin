@@ -57,8 +57,8 @@ func (u uuidGeneratorImpl) Generate() string {
 
 const (
 	// JavaDetectionCommand is the prologue command to detect on the Garden container if it contains a Java app. Visible for tests
-	JavaDetectionCommand              = "if ! pgrep -x \"java\" > /dev/null; then echo \"No 'java' process found running. Are you sure this is a Java app?\" >&2; exit 1; fi"
-	CheckNoCurrentJFRRecordingCommand = `OUTPUT=$($JCMD_COMMAND $(pidof java) JFR.check 2>&1); if [[ ! "$OUTPUT" == *"No available recording"* ]]; then echo "JFR recording already running. Stop it before starting a new recording."; exit 1; fi;`
+	JavaDetectionCommand              = "if ! pgrep -x \"java\" > /dev/null; then echo \"No 'java' process found running. Are you sure this is a Java app?\" >&2; $$EXIT 1; fi"
+	CheckNoCurrentJFRRecordingCommand = `OUTPUT=$($JCMD_COMMAND $$PIDOF_JAVA_APP JFR.check 2>&1); if [[ ! "$OUTPUT" == *"No available recording"* ]]; then echo "JFR recording already running. Stop it before starting a new recording."; $$EXIT 1; fi;`
 	FilterJCMDRemoteMessage           = `filter_jcmd_remote_message() {
   if command -v grep >/dev/null 2>&1; then
     grep -v -e "Connected to remote JVM" -e "JVM response code = 0"
@@ -135,6 +135,11 @@ type Command struct {
 	// Run the command in a subfolder of the container
 	GenerateArbitraryFiles           bool
 	GenerateArbitraryFilesFolderName string
+	// Used for creating the shell alias, which allows users to have similar commands in Docker
+	// if empty uses SshCommand
+	AliasCommand string
+	// if true, omit from alias generation
+	OmitAlias bool
 }
 
 // function names "HasMiscArgs" that is used on Command and checks whethere the SSHCommand contains $$ARGS
@@ -158,32 +163,34 @@ var commands = []Command{
 
 			OpenJDK: Wrap everything in an if statement in case jmap is available
 		*/
-		SshCommand: `if [ -f $$FILE_NAME ]; then echo >&2 'Heap dump $$FILE_NAME already exists'; exit 1; fi
+		SshCommand: `if [ -f $$FILE_NAME ]; then echo >&2 'Heap dump $$FILE_NAME already exists'; $$EXIT 1; fi
 JMAP_COMMAND=$(find -executable -name jmap | head -1 | tr -d [:space:])
 # SAP JVM: Wrap everything in an if statement in case jvmmon is available
 JVMMON_COMMAND=$(find -executable -name jvmmon | head -1 | tr -d [:space:])
 if [ -n "${JMAP_COMMAND}" ]; then
-OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=$$FILE_NAME $(pidof java) ) || STATUS_CODE=$?
-if [ ! -s $$FILE_NAME ]; then echo >&2 ${OUTPUT}; exit 1; fi
+OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=$$FILE_NAME $$PIDOF_JAVA_APP ) || STATUS_CODE=$?
+if [ ! -s $$FILE_NAME ]; then echo >&2 ${OUTPUT}; $$EXIT 1; fi
 if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi
 elif [ -n "${JVMMON_COMMAND}" ]; then
 echo -e 'change command line flag flags=-XX:HeapDumpOnDemandPath=$$FSPATH\ndump heap' > setHeapDumpOnDemandPath.sh
-OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -cmd "setHeapDumpOnDemandPath.sh" ) || STATUS_CODE=$?
+OUTPUT=$( ${JVMMON_COMMAND} -pid $$PIDOF_JAVA_APP -cmd "setHeapDumpOnDemandPath.sh" ) || STATUS_CODE=$?
 sleep 5 # Writing the heap dump is triggered asynchronously -> give the JVM some time to create the file
 HEAP_DUMP_NAME=$(find $$FSPATH -name 'java_pid*.hprof' -printf '%T@ %p\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\0' '\n' | head -n 1)
 SIZE=-1; OLD_SIZE=$(stat -c '%s' "${HEAP_DUMP_NAME}"); while [ ${SIZE} != ${OLD_SIZE} ]; do OLD_SIZE=${SIZE}; sleep 3; SIZE=$(stat -c '%s' "${HEAP_DUMP_NAME}"); done
-if [ ! -s "${HEAP_DUMP_NAME}" ]; then echo >&2 ${OUTPUT}; exit 1; fi
+if [ ! -s "${HEAP_DUMP_NAME}" ]; then echo >&2 ${OUTPUT}; $$EXIT 1; fi
 if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi
 fi`,
 		FileLabel:    "heap dump",
 		FileNamePart: "heapdump",
+		OmitAlias:    true,
 	},
 	{
 		Name:          "thread-dump",
 		Description:   "Generate a thread dump from a running Java application",
+		RequiredTools: []string{"jstack", "jvmmon"},
 		GenerateFiles: false,
-		SshCommand: "JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi; " +
-			"JVMMON_COMMAND=`find -executable -name jvmmon | head -1`; if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi",
+		SshCommand:    "${JSTACK_COMMAND} $$PIDOF_JAVA_APP; ${JVMMON_COMMAND} -pid $$PIDOF_JAVA_APP -c \"print stacktrace\"",
+		OmitAlias: 	true,
 	},
 	{
 		Name:          "vm-info",
@@ -191,6 +198,7 @@ fi`,
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
 		SshCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) VM.info | filter_jcmd_remote_message`,
+		AliasCommand:  `$JCMD_COMMAND $$PIDOF_JAVA_APP VM.info`,
 	},
 	{
 		Name:          "jcmd",
@@ -198,6 +206,7 @@ fi`,
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
 		SshCommand:    `$JCMD_COMMAND $(pidof java) $$ARGS`,
+		OmitAlias:     true,
 	},
 	{
 		Name:          "jfr-start",
@@ -211,6 +220,7 @@ fi`,
 		SshCommand: FilterJCMDRemoteMessage + CheckNoCurrentJFRRecordingCommand +
 			`$JCMD_COMMAND $(pidof java) JFR.start settings=default.jfc filename=$$FILE_NAME name=JFR | filter_jcmd_remote_message;
 		echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
+		AliasCommand: CheckNoCurrentJFRRecordingCommand + `$JCMD_COMMAND $$PIDOF_JAVA_APP JFR.start settings=default.jfc filename=$$FILE_NAME name=JFR`,
 	},
 	{
 		Name:          "jfr-start-profile",
@@ -224,6 +234,7 @@ fi`,
 		SshCommand: FilterJCMDRemoteMessage + CheckNoCurrentJFRRecordingCommand +
 			`$JCMD_COMMAND $(pidof java) JFR.start settings=profile.jfc filename=$$FILE_NAME name=JFR | filter_jcmd_remote_message;
 		echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
+		AliasCommand: CheckNoCurrentJFRRecordingCommand + `$JCMD_COMMAND $$PIDOF_JAVA_APP JFR.start settings=profile.jfc filename=$$FILE_NAME name=JFR`,
 	},
 	{
 		Name:                   "jfr-start-gc",
@@ -238,6 +249,7 @@ fi`,
 		SshCommand: FilterJCMDRemoteMessage + CheckNoCurrentJFRRecordingCommand +
 			`$JCMD_COMMAND $(pidof java) JFR.start settings=gc.jfc filename=$$FILE_NAME name=JFR | filter_jcmd_remote_message;
 		echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
+		AliasCommand: CheckNoCurrentJFRRecordingCommand + `$JCMD_COMMAND $$PIDOF_JAVA_APP JFR.start settings=gc.jfc filename=$$FILE_NAME name=JFR`,
 	},
 	{
 		Name:                   "jfr-start-gc-details",
@@ -252,6 +264,7 @@ fi`,
 		SshCommand: FilterJCMDRemoteMessage + CheckNoCurrentJFRRecordingCommand +
 			`$JCMD_COMMAND $(pidof java) JFR.start settings=gc_details.jfc filename=$$FILE_NAME name=JFR | filter_jcmd_remote_message;
 		echo "Use 'cf java jfr-stop $$APP_NAME' to copy the file to the local folder"`,
+		AliasCommand: CheckNoCurrentJFRRecordingCommand + `$JCMD_COMMAND $$PIDOF_JAVA_APP JFR.start settings=gc_details.jfc filename=$$FILE_NAME name=JFR`,
 	},
 	{
 		Name:          "jfr-stop",
@@ -262,6 +275,7 @@ fi`,
 		FileLabel:     "JFR recording",
 		FileNamePart:  "jfr",
 		SshCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) JFR.stop name=JFR | filter_jcmd_remote_message`,
+		AliasCommand:  `$JCMD_COMMAND $$PIDOF_JAVA_APP JFR.stop name=JFR`,
 	},
 	{
 		Name:          "jfr-dump",
@@ -272,6 +286,7 @@ fi`,
 		FileLabel:     "JFR recording",
 		FileNamePart:  "jfr",
 		SshCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) JFR.dump | filter_jcmd_remote_message`,
+		AliasCommand:  `$JCMD_COMMAND $$PIDOF_JAVA_APP JFR.dump`,
 	},
 	{
 		Name:          "jfr-status",
@@ -279,6 +294,7 @@ fi`,
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
 		SshCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) JFR.check | filter_jcmd_remote_message`,
+		AliasCommand:  `$JCMD_COMMAND $$PIDOF_JAVA_APP JFR.check`,
 	},
 	{
 		Name:          "vm-version",
@@ -286,6 +302,7 @@ fi`,
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
 		SshCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) VM.version | filter_jcmd_remote_message`,
+		AliasCommand:  `$JCMD_COMMAND $$PIDOF_JAVA_APP VM.version`,
 	},
 	{
 		Name:          "vm-vitals",
@@ -293,6 +310,7 @@ fi`,
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
 		SshCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) VM.vitals | filter_jcmd_remote_message`,
+		AliasCommand:  `$JCMD_COMMAND $$PIDOF_JAVA_APP VM.vitals`,
 	},
 	{
 		Name:                             "asprof",
@@ -303,6 +321,7 @@ fi`,
 		GenerateArbitraryFiles:           true,
 		GenerateArbitraryFilesFolderName: "asprof",
 		SshCommand:                       `$ASPROF_COMMAND $(pidof java) $$ARGS`,
+		OmitAlias:                        true,
 	},
 	{
 		Name:                   "asprof-start-cpu",
@@ -313,7 +332,8 @@ fi`,
 		NeedsFileName:          true,
 		FileExtension:          ".jfr",
 		FileNamePart:           "asprof",
-		SshCommand:             `$ASPROF_COMMAND start $(pidof java) -e cpu -f $$FILE_NAME; echo "Use 'cf java asprof-stop $$APP_NAME' to copy the file to the local folder"`,
+		SshCommand:             `$ASPROF_COMMAND start $$PIDOF_JAVA_APP -e cpu -f $$FILE_NAME; echo "Use 'cf java asprof-stop $$APP_NAME' to copy the file to the local folder"`,
+		AliasCommand:           `$ASPROF_COMMAND start $$PIDOF_JAVA_APP -e cpu -f $$FILE_NAME; echo "Use 'asprof-stop $$PIDOF_JAVA_APP' to copy the file to the local folder"`,
 	},
 	{
 		Name:                   "asprof-start-wall",
@@ -324,7 +344,8 @@ fi`,
 		NeedsFileName:          true,
 		FileExtension:          ".jfr",
 		FileNamePart:           "asprof",
-		SshCommand:             `$ASPROF_COMMAND start $(pidof java) -e wall -f $$FILE_NAME; echo "Use 'cf java asprof-stop $$APP_NAME' to copy the file to the local folder"`,
+		SshCommand:             `$ASPROF_COMMAND start $$PIDOF_JAVA_APP -e wall -f $$FILE_NAME; echo "Use 'cf java asprof-stop $$APP_NAME' to copy the file to the local folder"`,
+		AliasCommand:           `$ASPROF_COMMAND start $$PIDOF_JAVA_APP -e wall -f $$FILE_NAME; echo "Use 'asprof-stop $$PIDOF_JAVA_APP' to copy the file to the local folder"`,
 	},
 	{
 		Name:                   "asprof-start-alloc",
@@ -335,7 +356,8 @@ fi`,
 		NeedsFileName:          true,
 		FileExtension:          ".jfr",
 		FileNamePart:           "asprof",
-		SshCommand:             `$ASPROF_COMMAND start $(pidof java) -e alloc -f $$FILE_NAME; echo "Use 'cf java asprof-stop $$APP_NAME' to copy the file to the local folder"`,
+		SshCommand:             `$ASPROF_COMMAND start $$PIDOF_JAVA_APP -e alloc -f $$FILE_NAME; echo "Use 'cf java asprof-stop $$APP_NAME' to copy the file to the local folder"`,
+		AliasCommand:           `$ASPROF_COMMAND start $$PIDOF_JAVA_APP -e alloc -f $$FILE_NAME; echo "Use 'asprof-stop $$PIDOF_JAVA_APP' to copy the file to the local folder"`,
 	},
 	{
 		Name:                   "asprof-start-lock",
@@ -346,7 +368,8 @@ fi`,
 		NeedsFileName:          true,
 		FileExtension:          ".jfr",
 		FileNamePart:           "asprof",
-		SshCommand:             `$ASPROF_COMMAND start $(pidof java) -e lock -f $$FILE_NAME; echo "Use 'cf java asprof-stop $$APP_NAME' to copy the file to the local folder"`,
+		SshCommand:             `$ASPROF_COMMAND start $$PIDOF_JAVA_APP -e lock -f $$FILE_NAME; echo "Use 'cf java asprof-stop $$APP_NAME' to copy the file to the local folder"`,
+		AliasCommand:           `$ASPROF_COMMAND start $$PIDOF_JAVA_APP -e lock -f $$FILE_NAME; echo "Use 'asprof-stop $$PIDOF_JAVA_APP' to copy the file to the local folder"`,
 	},
 	{
 		Name:                   "asprof-stop",
@@ -357,7 +380,7 @@ fi`,
 		FileExtension:          ".jfr",
 		FileLabel:              "JFR recording",
 		FileNamePart:           "asprof",
-		SshCommand:             `$ASPROF_COMMAND stop $(pidof java)`,
+		SshCommand:             `$ASPROF_COMMAND stop $$PIDOF_JAVA_APP`,
 	},
 	{
 		Name:                   "asprof-status",
@@ -365,7 +388,7 @@ fi`,
 		RequiredTools:          []string{"asprof"},
 		OnlyOnRecentSapMachine: true,
 		GenerateFiles:          false,
-		SshCommand:             `$ASPROF_COMMAND status $(pidof java)`,
+		SshCommand:             `$ASPROF_COMMAND status $$PIDOF_JAVA_APP`,
 	},
 }
 
@@ -377,6 +400,189 @@ func toSentenceCase(input string) string {
 
 	// Convert the first letter to uppercase
 	return strings.ToUpper(string(input[0])) + strings.ToLower(input[1:])
+}
+
+func generateRequiredToolCommand(requiredTool string) []string {
+	uppercase := strings.ToUpper(requiredTool)
+	var ret = []string{fmt.Sprintf(`%s_COMMAND=$(which %s 2>/dev/null || command -v %s 2>/dev/null)
+if [ -z "${%s_COMMAND}" ]; then
+    if [ -n "$JAVA_HOME" ]; then
+        %s_COMMAND=$(find "$JAVA_HOME/bin" -name %s -type f -executable 2>/dev/null | head -1)
+    fi
+fi`, uppercase, requiredTool, requiredTool, uppercase, uppercase, requiredTool)}
+
+	if requiredTool == "jcmd" {
+		ret = append(ret, fmt.Sprintf(`ASPROF_COMMAND=$(which asprof 2>/dev/null || command -v asprof 2>/dev/null)
+if [ -n "${ASPROF_COMMAND}" ]; then 
+    JCMD_COMMAND="${ASPROF_COMMAND} jcmd"
+fi`))
+	}
+	return ret
+}
+
+func indentLines(input string, indent string) string {
+	lines := strings.Split(input, "\n")
+	for i := range lines {
+		if lines[i] != "" {
+			lines[i] = indent + lines[i]
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func generateAliasScript() {
+	// idea:
+	// create a script that replaces all variables
+
+	fmt.Println(`#!/usr/bin/env sh
+
+_jcmd() {
+  ASPROF_COMMAND=$(which asprof 2>/dev/null || command -v asprof 2>/dev/null)
+  if [ -n "${ASPROF_COMMAND}" ]; then 
+      "${ASPROF_COMMAND}" jcmd $@
+      return $!
+  fi
+  JCMD_COMMAND=$(which jcmd 2>/dev/null || command -v jcmd 2>/dev/null)
+  if [ -z "${JCMD_COMMAND}" ]; then
+      if [ -n "$JAVA_HOME" ]; then
+          JCMD_COMMAND=$(find "$JAVA_HOME/bin" -name jcmd -type f -executable 2>/dev/null | head -1)
+      fi
+  fi
+  "${JCMD_COMMAND}" jcmd $@
+  return $!
+}
+
+java_pid() {
+  # Function to find non-jcmd Java processes and return their PIDs
+  
+  # Define a function to list Java processes excluding jcmd-related ones
+
+  list_java_processes() {
+    # Use ps with comm= to find processes where the binary is named exactly "java"
+    # This excludes processes where "java" is just part of the command arguments
+    ps -e -o pid,comm= | grep "^[[:space:]]*[0-9][0-9]*[[:space:]]\+java$" | grep -v "jcmd\|JCmd"
+  }
+  
+  # Get the list of valid Java processes
+  local java_processes
+  java_processes=$(list_java_processes)
+  
+  # Count the number of valid Java processes
+  local process_count
+  process_count=$(echo "$java_processes" | grep -c .)
+  
+  # Case 1: No argument provided - use the only Java process if only one exists
+  if [ $# -eq 0 ]; then
+    if [ "$process_count" -eq 0 ]; then
+      echo "Error: No Java processes found." >&2
+      return 1
+    elif [ "$process_count" -eq 1 ]; then
+      # Extract just the PID from the first line
+      echo "$java_processes" | awk '{print $1}' | head -1
+      return 0
+    else
+      echo "Error: Multiple Java processes found. Please specify a PID." >&2
+      echo "Running Java processes:" >&2
+      echo "$java_processes" >&2
+      return 1
+    fi
+  fi
+  
+  # Case 2: PID argument provided - validate it's a Java (non-jcmd) process
+  local pid="$1"
+  
+  # Check if argument is a number
+  if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+    echo "Error: '$pid' is not a valid process ID." >&2
+    if [ "$process_count" -gt 0 ]; then
+      echo "Running Java processes:" >&2
+      echo "$java_processes" >&2
+    fi
+    return 1
+  fi
+  
+  # Check if process exists
+  if ! ps -p "$pid" > /dev/null; then
+    echo "Error: Process $pid does not exist." >&2
+    if [ "$process_count" -gt 0 ]; then
+      echo "Running Java processes:" >&2
+      echo "$java_processes" >&2
+    fi
+    return 1
+  fi
+  
+  # Get command for the specified PID
+  local cmd
+  cmd=$(ps -p "$pid" -o command= 2>/dev/null)
+  
+  # Check if it's a Java process and not a jcmd process
+  if echo "$cmd" | grep -q "java"; then
+    if echo "$cmd" | grep -q "jcmd\|JCmd\|sun.tools.jcmd"; then
+      echo "Error: Process $pid is a jcmd-related process, not a Java application." >&2
+      if [ "$process_count" -gt 0 ]; then
+        echo "Running Java processes:" >&2
+        echo "$java_processes" >&2
+      fi
+      return 1
+    else
+      # It's a valid Java process
+      echo "$pid"
+      return 0
+    fi
+  else
+    echo "Error: Process $pid is not a Java process." >&2
+    if [ "$process_count" -gt 0 ]; then
+      echo "Running Java processes:" >&2
+      echo "$java_processes" >&2
+    fi
+    return 1
+  fi
+}
+
+export -f java_pid
+`)
+	for _, command := range commands {
+		if command.OmitAlias {
+			continue
+		}
+		if command.AliasCommand == "" {
+			command.AliasCommand = command.SshCommand
+		}
+		var prefixCommand = ""
+		var aliasCommand = command.AliasCommand
+		var replacements = map[string]string{
+			"$$PIDOF_JAVA_APP": "$(java_pid)",
+			"$$FILE_NAME":      command.FileNamePart + `-$(date +"%Y%m%d-%H%M%S")` + command.FileExtension,
+			"$$FSPATH": 	"$(pwd)",
+			"$JCMD_COMMAND": "jcmd",
+			"$$EXIT": "return",
+		}
+		prohibited := []string{"$$APP_NAME", "$$ARGS"}
+		for key, value := range replacements {
+			aliasCommand = strings.ReplaceAll(aliasCommand, key, value)
+		}
+		for _, p := range prohibited {
+			if strings.Contains(aliasCommand, p) {
+				fmt.Println("Prohibited variable in alias command: " + p)
+			}
+		}
+		for _, tool := range command.RequiredTools {
+			if tool == "jcmd" {
+				continue
+			}
+			prefixCommand = strings.Join(generateRequiredToolCommand(tool), "\n") + "\n" + prefixCommand
+		}
+
+		fmt.Printf(`
+%s() {
+  local pid
+  pid=$(java_pid) || return 1
+%s
+%s
+}
+export -f %s
+`, command.Name, indentLines(prefixCommand, "  "), aliasCommand, command.Name)
+	}
 }
 
 func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator uuid.UUIDGenerator, util utils.CfJavaPluginUtil, args []string) (string, error) {
@@ -439,6 +645,14 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 	commandName := arguments[0]
 
+	if commandName == "generate-alias-script" {
+		if argumentLen > 1 {
+			return "", &InvalidUsageError{message: "generate-alias-script has no options or arguments"}
+		}
+		generateAliasScript()
+		return "", nil
+	}
+
 	index := -1
 	for i, command := range commands {
 		if command.Name == commandName {
@@ -496,21 +710,16 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	var remoteCommandTokens = []string{JavaDetectionCommand}
 
 	for _, requiredTool := range command.RequiredTools {
-		uppercase := strings.ToUpper(requiredTool)
-		var toolCommand = fmt.Sprintf("%s_COMMAND=$(realpath $(find -executable -name %s | head -1 | tr -d [:space:])); if [ -z \"${%s_COMMAND}\" ]; then echo \"%s not found\"; exit 1; fi", uppercase, requiredTool, uppercase, requiredTool)
-		if requiredTool == "jcmd" {
-			// add code that first checks whether asprof is present and if so use `asprof jcmd` instead of `jcmd`
-			remoteCommandTokens = append(remoteCommandTokens, toolCommand, "ASPROF_COMMAND=$(realpath $(find -executable -name asprof | head -1 | tr -d [:space:])); if [ -n \"${ASPROF_COMMAND}\" ]; then JCMD_COMMAND=\"${ASPROF_COMMAND} jcmd\"; fi")
-		} else {
-			remoteCommandTokens = append(remoteCommandTokens, toolCommand)
-		}
+		remoteCommandTokens = append(remoteCommandTokens, generateRequiredToolCommand(requiredTool)...)
 	}
 	fileName := ""
 	fspath := remoteDir
 
 	var replacements = map[string]string{
-		"$$ARGS":     miscArgs,
-		"$$APP_NAME": applicationName,
+		"$$ARGS":           miscArgs,
+		"$$APP_NAME":       applicationName,
+		"$$PIDOF_JAVA_APP": "$(pidof java)",
+		"$$EXIT":           "exit",
 	}
 
 	if command.GenerateFiles || command.NeedsFileName || command.GenerateArbitraryFiles {
@@ -649,6 +858,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 		}
 		usageText += "\n        " + command.Description
 	}
+	usageText += "\n\n  Use 'cf java generate-alias-script' for the creation of shell script with similar commands.\n"
 	return plugin.PluginMetadata{
 		Name: "java",
 		Version: plugin.VersionType{

@@ -51,6 +51,16 @@ jobs:
           name: cf-cli-java-plugin-${{ matrix.os }}
           path: dist/
 
+      - name: Run 'cf java generate-alias-script'
+        run: |
+          make install
+          cf java generate-alias-script > script.sh
+      
+      - name: Upload script
+        uses: actions/upload-artifact@v4
+        with:
+          name: script.sh
+
   release:
     name: Create Snapshot Release
     needs: build
