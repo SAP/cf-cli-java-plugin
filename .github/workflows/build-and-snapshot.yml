@@ -59,6 +59,13 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           cf java generate-alias-script > dist/script.sh
+      
+      - name: Upload script.sh
+        uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          name: script.sh
+          path: dist/
   
       - name: Upload artifact
         uses: actions/upload-artifact@v4
