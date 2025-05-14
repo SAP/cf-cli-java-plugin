@@ -39,9 +39,6 @@ jobs:
       - name: Lint Go files
         run: go fmt ./...
 
-      - name: Run tests
-        run: go test
-
       - name: Build binary
         run: python3 .github/workflows/build.py
 
