@@ -50,10 +50,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cf8-cli
 
-      - name: Run 'cf java generate-alias-script'
+      - name: Install cf plugin
         if: matrix.os == 'ubuntu-latest'
         run: |
           make install
+
+      - name: Run 'cf java generate-alias-script'
+        if: matrix.os == 'ubuntu-latest'
+        run: |
           cf java generate-alias-script > dist/script.sh
   
       - name: Upload artifact
