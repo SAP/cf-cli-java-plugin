@@ -85,6 +85,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist/ # Specify the directory where artifacts will be downloaded
+
+      - name: Combine all artifacts
+        run: |
+          mkdir -p dist
+          ls -alsh dist/**
+          mv dist/*/* dist/ || true
       
       - uses: thomashampson/delete-older-releases@main
         with:
