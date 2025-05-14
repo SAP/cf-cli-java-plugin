@@ -304,6 +304,10 @@ Please do not create GitHub issues for security-related doubts or problems.
 
 ## Changelog
 
+### Snapshot
+- Added `cf java generate-alias-script` to generate a script that can be used via `source script.sh`, 
+  adding commands like `vm-info` (with optional pid argument) to your shell
+
 ### 4.0.0-rc
 
 - Profiling and JCMD related features

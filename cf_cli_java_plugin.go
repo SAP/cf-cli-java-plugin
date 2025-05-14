@@ -153,8 +153,9 @@ var commands = []Command{
 		Description:   "Generate a heap dump from a running Java application",
 		GenerateFiles: true,
 		FileExtension: ".hprof",
+		RequiredTools: []string{"jmap", "jvmmon"},
 		/*
-					If there is not enough space on the filesystem to write the dump, jmap will create a file
+			If there is not enough space on the filesystem to write the dump, jmap will create a file
 			with size 0, output something about not enough space left on the device, and exit with status code 0.
 			Because YOLO.
 
@@ -180,17 +181,16 @@ SIZE=-1; OLD_SIZE=$(stat -c '%s' "${HEAP_DUMP_NAME}"); while [ ${SIZE} != ${OLD_
 if [ ! -s "${HEAP_DUMP_NAME}" ]; then echo >&2 ${OUTPUT}; $$EXIT 1; fi
 if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi
 fi`,
+AliasCommand: "$JMAP_COMMAND -dump:format=b,file=$$FILE_NAME $$PIDOF_JAVA_APP",
 		FileLabel:    "heap dump",
 		FileNamePart: "heapdump",
-		OmitAlias:    true,
 	},
 	{
 		Name:          "thread-dump",
 		Description:   "Generate a thread dump from a running Java application",
 		RequiredTools: []string{"jstack", "jvmmon"},
 		GenerateFiles: false,
-		SshCommand:    "${JSTACK_COMMAND} $$PIDOF_JAVA_APP; ${JVMMON_COMMAND} -pid $$PIDOF_JAVA_APP -c \"print stacktrace\"",
-		OmitAlias: 	true,
+		SshCommand:    "${JSTACK_COMMAND} $$PIDOF_JAVA_APP; ${JVMMON_COMMAND} -pid $$PIDOF_JAVA_APP -c \"print stacktrace\" 2> /dev/null",
 	},
 	{
 		Name:          "vm-info",
@@ -404,7 +404,7 @@ func toSentenceCase(input string) string {
 
 func generateRequiredToolCommand(requiredTool string) []string {
 	uppercase := strings.ToUpper(requiredTool)
-	var ret = []string{fmt.Sprintf(`%s_COMMAND=$(which %s 2>/dev/null || command -v %s 2>/dev/null)
+	var ret = []string{fmt.Sprintf(`%s_COMMAND=$(which %s 2>/dev/null || command -v %s 2>/dev/null || echo '___NOT_FOUND___')
 if [ -z "${%s_COMMAND}" ]; then
     if [ -n "$JAVA_HOME" ]; then
         %s_COMMAND=$(find "$JAVA_HOME/bin" -name %s -type f -executable 2>/dev/null | head -1)
@@ -415,7 +415,8 @@ fi`, uppercase, requiredTool, requiredTool, uppercase, uppercase, requiredTool)}
 		ret = append(ret, fmt.Sprintf(`ASPROF_COMMAND=$(which asprof 2>/dev/null || command -v asprof 2>/dev/null)
 if [ -n "${ASPROF_COMMAND}" ]; then 
     JCMD_COMMAND="${ASPROF_COMMAND} jcmd"
-fi`))
+fi
+`))
 	}
 	return ret
 }
