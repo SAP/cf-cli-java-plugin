@@ -578,7 +578,7 @@ export -f java_pid
   local pid
   pid=$(java_pid) || return 1
 %s
-%s
+  %s
 }
 export -f %s
 `, command.Name, indentLines(prefixCommand, "  "), aliasCommand, command.Name)
