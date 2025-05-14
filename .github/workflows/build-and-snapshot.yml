@@ -85,11 +85,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist/ # Specify the directory where artifacts will be downloaded
-
-      - name: Combine all artifacts
-        run: |
-          mkdir -p dist
-          mv dist/*/* dist/ || true
       
       - uses: thomashampson/delete-older-releases@main
         with:
@@ -106,7 +101,6 @@ jobs:
           files: dist/*
           prerelease: true
           tag_name: snapshot
-          overwrite: true
           body: |
             This is a snapshot release of the cf-cli-java-plugin.
             It includes the latest changes and is not intended for production use.
