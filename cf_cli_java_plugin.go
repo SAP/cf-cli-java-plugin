@@ -458,6 +458,10 @@ java_pid() {
   
   # Define a function to list Java processes excluding jcmd-related ones
 
+  _ps() {
+	# implements ps -e -o pid,comm= by traversing the proc file system
+}
+
   list_java_processes() {
     # Use ps with comm= to find processes where the binary is named exactly "java"
     # This excludes processes where "java" is just part of the command arguments
