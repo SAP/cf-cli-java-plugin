@@ -39,6 +39,9 @@ jobs:
       - name: Lint Go files
         run: go fmt ./...
 
+      - name: Run Go tests
+        run: go test
+
       - name: Build binary
         run: python3 .github/workflows/build.py
   
@@ -47,33 +50,6 @@ jobs:
         with:
           name: cf-cli-java-plugin-${{ matrix.os }}
           path: dist/
-
-      - name: Install cf
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          wget -q -O - https://packages.cloudfoundry.org/debian/cli.cloudfoundry.org.key | sudo gpg --dearmor -o /usr/share/keyrings/cli.cloudfoundry.org.gpg
-          echo "deb [signed-by=/usr/share/keyrings/cli.cloudfoundry.org.gpg] https://packages.cloudfoundry.org/debian stable main" | sudo tee /etc/apt/sources.list.d/cloudfoundry-cli.list
-          sudo apt-get update
-          sudo apt-get install -y cf8-cli
-
-      - name: Install cf plugin
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          make install
-
-      - name: Run 'cf java generate-alias-script'
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          cf java generate-alias-script > dist/script.sh
-      
-      - name: Upload script.sh
-        uses: actions/upload-artifact@v4
-        if: matrix.os == 'ubuntu-latest'
-        with:
-          name: script
-          path: dist/
-
-
 
   release:
     name: Create Snapshot Release
@@ -90,7 +66,6 @@ jobs:
       - name: Combine all artifacts
         run: |
           mkdir -p dist
-          ls -alsh dist/**
           mv dist/*/* dist/ || true
       
       - uses: thomashampson/delete-older-releases@main
