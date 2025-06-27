@@ -81,12 +81,31 @@ const (
 // user facing errors). The CLI will exit 0 if the plugin exits 0 and will exit
 // 1 should the plugin exit nonzero.
 func (c *JavaPlugin) Run(cliConnection plugin.CliConnection, args []string) {
+	// Check if verbose flag is in args for early logging
+	verbose := false
+	for _, arg := range args {
+		if arg == "-v" || arg == "--verbose" {
+			verbose = true
+			break
+		}
+	}
+
+	if verbose {
+		fmt.Printf("[VERBOSE] Run called with args: %v\n", args)
+	}
+
 	_, err := c.DoRun(&commandExecutorImpl{cliConnection: cliConnection}, &uuidGeneratorImpl{}, utils.CfJavaPluginUtilImpl{}, args)
 	if err != nil {
+		if verbose {
+			fmt.Printf("[VERBOSE] Error occurred: %v\n", err)
+		}
 		if err.Error() != "unexpected EOF" {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		}
 		os.Exit(1)
+	}
+	if verbose {
+		fmt.Printf("[VERBOSE] Run completed successfully\n")
 	}
 }
 
@@ -94,6 +113,19 @@ func (c *JavaPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 func (c *JavaPlugin) DoRun(commandExecutor cmd.CommandExecutor, uuidGenerator uuid.UUIDGenerator, util utils.CfJavaPluginUtil, args []string) (string, error) {
 	traceLogger := trace.NewLogger(os.Stdout, true, os.Getenv("CF_TRACE"), "")
 	ui := terminal.NewUI(os.Stdin, os.Stdout, terminal.NewTeePrinter(os.Stdout), traceLogger)
+
+	// Check if verbose flag is in args for early logging
+	verbose := false
+	for _, arg := range args {
+		if arg == "-v" || arg == "--verbose" {
+			verbose = true
+			break
+		}
+	}
+
+	if verbose {
+		fmt.Printf("[VERBOSE] DoRun called with args: %v\n", args)
+	}
 
 	output, err := c.execute(commandExecutor, uuidGenerator, util, args)
 	if err != nil {
@@ -395,7 +427,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	}
 
 	if os.Getenv("CF_TRACE") == "true" {
-		return "", errors.New("The environment variable CF_TRACE is set to true. This prevents download of the dump from succeeding")
+		return "", errors.New("the environment variable CF_TRACE is set to true. This prevents download of the dump from succeeding")
 	}
 
 	commandFlags := flags.New()
@@ -404,6 +436,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	commandFlags.NewBoolFlag("keep", "k", "whether to `keep` the heap-dump/JFR/... files on the container of the application instance after having downloaded it locally")
 	commandFlags.NewBoolFlag("no-download", "nd", "do not download the heap-dump/JFR/... file to the local machine")
 	commandFlags.NewBoolFlag("dry-run", "n", "triggers the `dry-run` mode to show only the cf-ssh command that would have been executed")
+	commandFlags.NewBoolFlag("verbose", "v", "enable verbose output for the plugin")
 	commandFlags.NewStringFlag("container-dir", "cd", "specify the folder path where the dump/JFR/... file should be stored in the container")
 	commandFlags.NewStringFlag("local-dir", "ld", "specify the folder where the dump/JFR/... file will be downloaded to, dump file wil not be copied to local if this parameter was not set")
 	commandFlags.NewStringFlag("args", "a", "Miscellaneous arguments to pass to the command in the container, be aware to end it with a space if it is a simple option")
@@ -420,15 +453,34 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		miscArgs = commandFlags.String("args")
 	}
 
+	verbose := commandFlags.IsSet("verbose")
+
+	// Helper function for verbose logging
+	logVerbose := func(message string) {
+		if verbose {
+			fmt.Printf("[VERBOSE] %s\n", message)
+		}
+	}
+
+	logVerbose("Starting command execution")
+	logVerbose(fmt.Sprintf("Command arguments: %v", args))
+
 	applicationInstance := commandFlags.Int("app-instance-index")
 	noDownload := commandFlags.IsSet("no-download")
 	keepAfterDownload := commandFlags.IsSet("keep") || noDownload
+
+	logVerbose(fmt.Sprintf("Application instance: %d", applicationInstance))
+	logVerbose(fmt.Sprintf("No download: %t", noDownload))
+	logVerbose(fmt.Sprintf("Keep after download: %t", keepAfterDownload))
 
 	remoteDir := commandFlags.String("container-dir")
 	localDir := commandFlags.String("local-dir")
 	if localDir == "" {
 		localDir = "."
 	}
+
+	logVerbose(fmt.Sprintf("Remote directory: %s", remoteDir))
+	logVerbose(fmt.Sprintf("Local directory: %s", localDir))
 
 	arguments := commandFlags.Args()
 	argumentLen := len(arguments)
@@ -438,6 +490,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	}
 
 	commandName := arguments[0]
+	logVerbose(fmt.Sprintf("Command name: %s", commandName))
 
 	index := -1
 	for i, command := range commands {
@@ -456,9 +509,12 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	}
 
 	command := commands[index]
+	logVerbose(fmt.Sprintf("Found command: %s - %s", command.Name, command.Description))
 	if !command.GenerateFiles && !command.GenerateArbitraryFiles {
+		logVerbose("Command does not generate files, checking for invalid file flags")
 		for _, flag := range fileFlags {
 			if commandFlags.IsSet(flag) {
+				logVerbose(fmt.Sprintf("Invalid flag %q detected for command %s", flag, command.Name))
 				return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for %s", flag, command.Name)}
 			}
 		}
@@ -467,11 +523,16 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		trimmedMiscArgs := strings.TrimLeft(miscArgs, " ")
 		if len(trimmedMiscArgs) > 6 && trimmedMiscArgs[:6] == "start " {
 			noDownload = true
+			logVerbose("asprof start command detected, setting noDownload to true")
 		} else {
 			noDownload = trimmedMiscArgs == "start"
+			if noDownload {
+				logVerbose("asprof start command detected, setting noDownload to true")
+			}
 		}
 	}
 	if !command.HasMiscArgs() && commandFlags.IsSet("args") {
+		logVerbose(fmt.Sprintf("Command %s does not support --args flag", command.Name))
 		return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for %s", "args", command.Name)}
 	}
 	if argumentLen == 1 {
@@ -481,11 +542,14 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	}
 
 	applicationName := arguments[1]
+	logVerbose(fmt.Sprintf("Application name: %s", applicationName))
 
 	cfSSHArguments := []string{"ssh", applicationName}
 	if applicationInstance > 0 {
 		cfSSHArguments = append(cfSSHArguments, "--app-instance-index", strconv.Itoa(applicationInstance))
 	}
+
+	logVerbose(fmt.Sprintf("CF SSH arguments: %v", cfSSHArguments))
 
 	supported, err := util.CheckRequiredTools(applicationName)
 
@@ -493,16 +557,24 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		return "required tools checking failed", err
 	}
 
+	logVerbose("Required tools check passed")
+
 	var remoteCommandTokens = []string{JavaDetectionCommand}
 
+	logVerbose("Building remote command tokens")
+	logVerbose(fmt.Sprintf("Java detection command: %s", JavaDetectionCommand))
+
 	for _, requiredTool := range command.RequiredTools {
+		logVerbose(fmt.Sprintf("Setting up required tool: %s", requiredTool))
 		uppercase := strings.ToUpper(requiredTool)
 		var toolCommand = fmt.Sprintf("%s_COMMAND=$(realpath $(find -executable -name %s | head -1 | tr -d [:space:])); if [ -z \"${%s_COMMAND}\" ]; then echo \"%s not found\"; exit 1; fi", uppercase, requiredTool, uppercase, requiredTool)
 		if requiredTool == "jcmd" {
 			// add code that first checks whether asprof is present and if so use `asprof jcmd` instead of `jcmd`
 			remoteCommandTokens = append(remoteCommandTokens, toolCommand, "ASPROF_COMMAND=$(realpath $(find -executable -name asprof | head -1 | tr -d [:space:])); if [ -n \"${ASPROF_COMMAND}\" ]; then JCMD_COMMAND=\"${ASPROF_COMMAND} jcmd\"; fi")
+			logVerbose("Added jcmd with asprof fallback")
 		} else {
 			remoteCommandTokens = append(remoteCommandTokens, toolCommand)
+			logVerbose(fmt.Sprintf("Added tool command for %s", requiredTool))
 		}
 	}
 	fileName := ""
@@ -514,21 +586,26 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	}
 
 	if command.GenerateFiles || command.NeedsFileName || command.GenerateArbitraryFiles {
+		logVerbose("Command requires file generation")
 		fspath, err = util.GetAvailablePath(applicationName, remoteDir)
 		if err != nil {
 			return "", err
 		}
+		logVerbose(fmt.Sprintf("Available path: %s", fspath))
 		if command.GenerateArbitraryFiles {
 			fspath = fspath + "/" + command.GenerateArbitraryFilesFolderName
+			logVerbose(fmt.Sprintf("Updated path for arbitrary files: %s", fspath))
 		}
 
 		fileName = fspath + "/" + applicationName + "-" + command.FileNamePart + "-" + uuidGenerator.Generate() + command.FileExtension
+		logVerbose(fmt.Sprintf("Generated filename: %s", fileName))
 		replacements["$$FILE_NAME"] = fileName
 		replacements["$$FSPATH"] = fspath
 		if command.GenerateArbitraryFiles {
 			// prepend 'mkdir -p $$FSPATH' to the command to create the directory if it does not exist
 			remoteCommandTokens = append([]string{"mkdir -p " + fspath}, remoteCommandTokens...)
 			remoteCommandTokens = append(remoteCommandTokens, "cd "+fspath)
+			logVerbose(fmt.Sprintf("Added directory creation and navigation commands for: %s", fspath))
 		}
 	}
 
@@ -538,10 +615,16 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	}
 	remoteCommandTokens = append(remoteCommandTokens, commandText)
 
+	logVerbose(fmt.Sprintf("Command text after replacements: %s", commandText))
+	logVerbose(fmt.Sprintf("Full remote command tokens: %v", remoteCommandTokens))
+
 	cfSSHArguments = append(cfSSHArguments, "--command")
 	remoteCommand := strings.Join(remoteCommandTokens, "; ")
 
+	logVerbose(fmt.Sprintf("Final remote command: %s", remoteCommand))
+
 	if commandFlags.IsSet("dry-run") {
+		logVerbose("Dry-run mode enabled, returning command without execution")
 		// When printing out the entire command line for separate execution, we wrap the remote command in single quotes
 		// to prevent the shell processing it from running it in local
 		cfSSHArguments = append(cfSSHArguments, "'"+remoteCommand+"'")
@@ -549,72 +632,101 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	}
 
 	fullCommand := append(cfSSHArguments, remoteCommand)
+	logVerbose(fmt.Sprintf("Executing command: %v", fullCommand))
 
 	output, err := commandExecutor.Execute(fullCommand)
+	logVerbose("Command execution completed")
 
 	if command.GenerateFiles && !noDownload {
+		logVerbose("Processing file generation and download")
 
 		finalFile := ""
 		var err error
 		switch command.FileExtension {
 		case ".hprof":
+			logVerbose("Finding heap dump file")
 			finalFile, err = util.FindHeapDumpFile(cfSSHArguments, fileName, fspath)
 		case ".jfr":
+			logVerbose("Finding JFR file")
 			finalFile, err = util.FindJFRFile(cfSSHArguments, fileName, fspath)
 		default:
 			return "", &InvalidUsageError{message: fmt.Sprintf("Unsupported file extension %q", command.FileExtension)}
 		}
 		if err == nil && finalFile != "" {
 			fileName = finalFile
+			logVerbose(fmt.Sprintf("Found file: %s", finalFile))
 			fmt.Println("Successfully created " + command.FileLabel + " in application container at: " + fileName)
 		} else {
+			logVerbose(fmt.Sprintf("Failed to find file, error: %v", err))
 			fmt.Println("Failed to find " + command.FileLabel + " in application container")
 			return "", err
 		}
 
 		localFileFullPath := localDir + "/" + applicationName + "-" + command.FileNamePart + "-" + uuidGenerator.Generate() + command.FileExtension
+		logVerbose(fmt.Sprintf("Downloading file to: %s", localFileFullPath))
 		err = util.CopyOverCat(cfSSHArguments, fileName, localFileFullPath)
 		if err == nil {
+			logVerbose("File download completed successfully")
 			fmt.Println(toSentenceCase(command.FileLabel) + " file saved to: " + localFileFullPath)
 		} else {
+			logVerbose(fmt.Sprintf("File download failed: %v", err))
 			return "", err
 		}
 
 		if !keepAfterDownload {
+			logVerbose("Deleting remote file")
 			err = util.DeleteRemoteFile(cfSSHArguments, fileName)
 			if err != nil {
+				logVerbose(fmt.Sprintf("Failed to delete remote file: %v", err))
 				return "", err
 			}
+			logVerbose("Remote file deleted successfully")
 			fmt.Println(toSentenceCase(command.FileLabel) + " file deleted in application container")
+		} else {
+			logVerbose("Keeping remote file as requested")
 		}
 	}
 	if command.GenerateArbitraryFiles && !noDownload {
+		logVerbose("Processing arbitrary files download")
 		// download all files in the generic folder
 		files, err := util.ListFiles(cfSSHArguments, fspath)
 		if err != nil {
+			logVerbose(fmt.Sprintf("Failed to list files: %v", err))
 			return "", err
 		}
+		logVerbose(fmt.Sprintf("Found %d files to download", len(files)))
 		if len(files) != 0 {
 			for _, file := range files {
+				logVerbose(fmt.Sprintf("Downloading file: %s", file))
 				localFileFullPath := localDir + "/" + file
 				err = util.CopyOverCat(cfSSHArguments, fspath+"/"+file, localFileFullPath)
 				if err == nil {
+					logVerbose(fmt.Sprintf("File %s downloaded successfully", file))
 					fmt.Printf("File %s saved to: %s\n", file, localFileFullPath)
 				} else {
+					logVerbose(fmt.Sprintf("Failed to download file %s: %v", file, err))
 					return "", err
 				}
 			}
 
 			if !keepAfterDownload {
+				logVerbose("Deleting remote file folder")
 				err = util.DeleteRemoteFile(cfSSHArguments, fspath)
 				if err != nil {
+					logVerbose(fmt.Sprintf("Failed to delete remote folder: %v", err))
 					return "", err
 				}
+				logVerbose("Remote folder deleted successfully")
 				fmt.Println("File folder deleted in application container")
+			} else {
+				logVerbose("Keeping remote files as requested")
 			}
+		} else {
+			logVerbose("No files found to download")
 		}
 	}
 	// We keep this around to make the compiler happy, but commandExecutor.Execute will cause an os.Exit
+	logVerbose("Command execution completed successfully")
 	return strings.Join(output, "\n"), err
 }
 
@@ -678,6 +790,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 						"container-dir":      "-cd, the directory path in the container that the heap dump/JFR/... file will be saved to",
 						"local-dir":          "-ld, the local directory path that the dump/JFR/... file will be saved to, defaults to the current directory",
 						"args":               "-a, Miscellaneous arguments to pass to the command (if supported) in the container, be aware to end it with a space if it is a simple option",
+						"verbose":            "-v, enable verbose output for the plugin",
 					},
 				},
 			},

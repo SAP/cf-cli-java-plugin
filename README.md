@@ -224,6 +224,7 @@ OPTIONS:
    -container-dir            -cd, the directory path in the container that the heap dump/JFR/... file will be saved to
    -dry-run                  -n, just output to command line what would be executed
    -keep                     -k, keep the heap dump in the container; by default the heap dump/JFR/... will be deleted from the container's filesystem after been downloaded
+   -verbose                  -v, enable verbose output for the plugin
 </pre>
 
 The heap dumps and profiles will be copied to a local file if `-local-dir` is specified as a full folder path. Without providing `-local-dir` the heap dump will only be created in the container and not transferred.
