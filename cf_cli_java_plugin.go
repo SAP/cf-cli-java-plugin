@@ -312,7 +312,7 @@ fi`,
 		Description:   "Check the running Java Flight Recorder recording on a running Java application",
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
-		SshCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) JFR.check | filter_jcmd_remote_message`,
+		SshCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) JFR.check | filter_jcmd_remote_message`,
 	},
 	{
 		Name:          "vm-version",
