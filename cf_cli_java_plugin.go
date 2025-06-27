@@ -225,11 +225,13 @@ fi`,
 		SshCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) VM.info | filter_jcmd_remote_message`,
 	},
 	{
-		Name:          "jcmd",
-		Description:   "Run a JCMD command on a running Java application via --args, downloads and deletes all files that are created in the current folder, use '--no-download' to prevent this",
-		RequiredTools: []string{"jcmd"},
-		GenerateFiles: false,
-		SshCommand:    `$JCMD_COMMAND $(pidof java) $$ARGS`,
+		Name:                             "jcmd",
+		Description:                      "Run a JCMD command on a running Java application via --args, downloads and deletes all files that are created in the current folder, use '--no-download' to prevent this",
+		RequiredTools:                    []string{"jcmd"},
+		GenerateFiles:                    false,
+		GenerateArbitraryFiles:           true,
+		GenerateArbitraryFilesFolderName: "jcmd",
+		SshCommand:                       `$JCMD_COMMAND $(pidof java) $$ARGS`,
 	},
 	{
 		Name:          "jfr-start",
@@ -687,9 +689,13 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		}
 	}
 	if command.GenerateArbitraryFiles && !noDownload {
-		logVerbose("Processing arbitrary files download")
+		logVerbose(fmt.Sprintf("Processing arbitrary files download: %s", fspath))
+		logVerbose(fmt.Sprintf("cfSSHArguments: %v", cfSSHArguments))
 		// download all files in the generic folder
 		files, err := util.ListFiles(cfSSHArguments, fspath)
+		for i, file := range files {
+			logVerbose(fmt.Sprintf("File %d: %s", i+1, file))
+		}
 		if err != nil {
 			logVerbose(fmt.Sprintf("Failed to list files: %v", err))
 			return "", err

@@ -187,6 +187,8 @@ func (checker CfJavaPluginUtilImpl) GetAvailablePath(data string, userpath strin
 }
 
 func (checker CfJavaPluginUtilImpl) CopyOverCat(args []string, src string, dest string) error {
+	fmt.Println("Copying file from remote to local: ", src, " to ", dest)
+	fmt.Println("Args used: ", args)
 	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		return errors.New("Error creating local file at  " + dest + ". Please check that you are allowed to create files at the given local path.")
