@@ -6,12 +6,8 @@ toolchain go1.23.5
 
 require (
 	code.cloudfoundry.org/cli v7.1.0+incompatible
-	github.com/SAP/cf-cli-java-plugin v0.0.0-20210701123331-dc7334389e07
-	github.com/onsi/ginkgo v1.16.4
-	github.com/onsi/gomega v1.36.2
 	github.com/satori/go.uuid v1.2.0
 	github.com/simonleung8/flags v0.0.0-20170704170018-8020ed7bcf1a
-	utils v1.0.0
 )
 
 require (
@@ -34,9 +30,7 @@ require (
 	github.com/cppforlife/go-patch v0.2.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
 	github.com/fatih/color v1.12.0 // indirect
-	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/jessevdk/go-flags v1.5.0 // indirect
@@ -46,8 +40,7 @@ require (
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
-	github.com/nxadm/tail v1.4.8 // indirect
-	github.com/onsi/ginkgo/v2 v2.22.2 // indirect
+	github.com/onsi/gomega v1.36.2 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
@@ -65,9 +58,5 @@ require (
 	google.golang.org/grpc v1.71.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/cheggaaa/pb.v1 v1.0.28 // indirect
-	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace utils => ./utils

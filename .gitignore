@@ -31,3 +31,22 @@ build/
 
 # built project binary (go build)
 cf-java-plugin
+
+# Testing directory - sensitive config and test results
+test/test_config.yml
+test/*.hprof
+test/*.jfr
+test/test_results/
+test/test_reports/
+test/__pycache__/
+test/.pytest_cache/
+test/snapshots/
+
+# JFR files
+*.jfr
+
+# Heap dump files
+*.hprof
+
+# Build artifacts
+dist

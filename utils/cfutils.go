@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 	"slices"
+	"strings"
 )
 
 type CfJavaPluginUtilImpl struct {
@@ -137,8 +137,7 @@ func (checker CfJavaPluginUtilImpl) CheckRequiredTools(app string) (bool, error)
 
 	output, err = exec.Command("cf", "ssh", app, "-c", "find -executable | grep -E '(.*jmap$)|(.*jvmmon$)'").Output()
 	if err != nil {
-		return false, errors.New("unknown error occured while checking existence of required tools jvmmon/jmap")
-
+		return false, errors.New(fmt.Sprintf("Unknown error occured while checking existence of required tools jvmmon/jmap: %s", output))
 	}
 	if !strings.Contains(string(output[:]), "/") {
 		return false, errors.New(`jvmmon or jmap are required for generating heap dump, you can modify your application manifest.yaml on the 'JBP_CONFIG_OPEN_JDK_JRE' environment variable. This could be done like this:
@@ -187,8 +186,6 @@ func (checker CfJavaPluginUtilImpl) GetAvailablePath(data string, userpath strin
 }
 
 func (checker CfJavaPluginUtilImpl) CopyOverCat(args []string, src string, dest string) error {
-	fmt.Println("Copying file from remote to local: ", src, " to ", dest)
-	fmt.Println("Args used: ", args)
 	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		return errors.New("Error creating local file at  " + dest + ". Please check that you are allowed to create files at the given local path.")

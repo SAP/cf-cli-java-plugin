@@ -1,0 +1,67 @@
+# Configuration files - contain sensitive credentials
+test_config.yml
+config.yml
+*.config.yml
+
+# Test results and reports
+test_results/
+test_reports/
+test_output/
+*.xml
+*.json
+pytest_cache/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Snapshot testing - output snapshots contain sensitive data
+snapshots/
+*.snapshot
+
+# Downloaded files from tests
+*.hprof
+*.jfr
+*.log
+
+# Temporary test files and directories
+temp_*
+tmp_*
+.temp/
+.tmp/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Coverage reports
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# pytest
+test_report.html

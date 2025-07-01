@@ -1,4 +1,4 @@
-[![REUSE status](https://api.reuse.software/badge/github.com/SAP/cf-cli-java-plugin)](https://api.reuse.software/info/github.com/SAP/cf-cli-java-plugin) [![Build and Snapshot Release](https://github.com/SAP/cf-cli-java-plugin/actions/workflows/build-and-snapshot.yml/badge.svg)](https://github.com/SAP/cf-cli-java-plugin/actions/workflows/build-and-snapshot.yml)
+[![REUSE status](https://api.reuse.software/badge/github.com/SAP/cf-cli-java-plugin)](https://api.reuse.software/info/github.com/SAP/cf-cli-java-plugin) [![Build and Snapshot Release](https://github.com/SAP/cf-cli-java-plugin/actions/workflows/build-and-snapshot.yml/badge.svg)](https://github.com/SAP/cf-cli-java-plugin/actions/workflows/build-and-snapshot.yml) [![PR Validation](https://github.com/SAP/cf-cli-java-plugin/actions/workflows/pr-validation.yml/badge.svg)](https://github.com/SAP/cf-cli-java-plugin/actions/workflows/pr-validation.yml)
 
 # Cloud Foundry Command Line Java plugin
 
@@ -144,6 +144,30 @@ JVM response code = 0
 $TIME s
 ```
 
+#### Variable Replacements for JCMD and Asprof Commands
+
+When using `jcmd` and `asprof` commands with the `--args` parameter, the following variables are automatically replaced in your command strings:
+
+* `@FSPATH`: A writable directory path on the remote container (always set, typically `/tmp/jcmd` or `/tmp/asprof`)
+* `@ARGS`: The command arguments you provided via `--args`
+* `@APP_NAME`: The name of your Cloud Foundry application
+* `@FILE_NAME`: Generated filename for file operations (includes full path with UUID)
+
+Example usage:
+
+```sh
+# Create a heap dump in the available directory
+cf java jcmd $APP_NAME --args 'GC.heap_dump @FSPATH/my_heap.hprof'
+
+# Use an absolute path instead
+cf java jcmd $APP_NAME --args "GC.heap_dump /tmp/absolute_heap.hprof"
+
+# Access the application name in your command
+cf java jcmd $APP_NAME --args 'echo "Processing app: @APP_NAME"'
+```
+
+**Note**: Variables use the `@` prefix to avoid shell expansion issues. The plugin automatically creates the `@FSPATH` directory and downloads any files created there to your local directory (unless `--no-download` is used).
+
 ### Commands
 
 The following is a list of all available commands (some of the SapMachine specific),
@@ -281,12 +305,55 @@ So, it is theoretically possible that execuing a heap dump on a JVM in poor stat
 Profiles might cause overhead depending on the configuration, but the default configurations
 typically have a limited overhead.
 
-## Tests and Mocking
+## Development
 
-The tests are written using [Ginkgo](https://onsi.github.io/ginkgo/) with [Gomega](https://onsi.github.io/gomega/) for the BDD structure, and [Counterfeiter](https://github.com/maxbrunsfeld/counterfeiter) for the mocking generation.
-Unless modifications to the helper interfaces `cmd.CommandExecutor` and `uuid.UUIDGenerator` are needed, there should be no need to regenerate the mocks.
+### Quick Start
 
-To run the tests, go to the root of the repository and simply run `gingko` (you may need to install Ginkgo first, e.g., `go get github.com/onsi/ginkgo/ginkgo` puts the executable under `$GOPATH/bin`).
+```bash
+# Setup environment and build
+./setup-dev-env.sh
+make build
+
+# Run all quality checks and tests
+./scripts/lint-all.sh ci
+
+# Auto-fix formatting before commit
+./scripts/lint-all.sh fix
+```
+
+### Testing
+
+**Python Tests**: Modern pytest-based test suite.
+
+```bash
+cd test && ./setup.sh && ./test.py all
+```
+
+### Test Suite Resumption
+
+The Python test runner in `test/` supports resuming tests from any point using the `--start-with` option:
+
+```bash
+./test.py --start-with TestClass::test_method all  # Start with a specific test (inclusive)
+```
+
+This is useful for long test suites or after interruptions. See `test/README.md` for more details.
+
+### Code Quality
+
+Centralized linting scripts:
+
+```bash
+./scripts/lint-all.sh check    # Quality check
+./scripts/lint-all.sh fix      # Auto-fix formatting
+./scripts/lint-all.sh ci       # CI validation
+```
+
+### CI/CD
+
+- Multi-platform builds (Linux, macOS, Windows)
+- Automated linting and testing on PRs
+- Pre-commit hooks with auto-formatting
 
 ## Support, Feedback, Contributing
 
@@ -306,6 +373,11 @@ Please do not create GitHub issues for security-related doubts or problems.
 ## Changelog
 
 ### Snapshot
+
+### 4.0.0-snapshot
+
+- Create a proper test suite
+- Fix many bugs discovered during testing
 
 ### 4.0.0-rc2
 

@@ -1,0 +1,20 @@
+"""
+Configuration file for CF Java Plugin testing.
+
+Copy this file to test_config.yml and fill in your credentials.
+Environment variables (CF_API, CF_USERNAME, CF_PASSWORD, CF_ORG, CF_SPACE) 
+take precedence over values in this file.
+"""
+
+# CF Configuration
+cf:
+  api_endpoint: "https://api.cf.eu12.hana.ondemand.com"  # Or set CF_API environment variable
+  username: "your-username"  # Or set CF_USERNAME environment variable
+  password: "your-password"  # Or set CF_PASSWORD environment variable
+  org: "sapmachine-testing"  # Or set CF_ORG environment variable
+  space: "dev"               # Or set CF_SPACE environment variable
+
+# Timeouts in seconds
+timeouts:
+  app_start: 300
+  command: 60

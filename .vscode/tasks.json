@@ -1,0 +1,386 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run All Tests",
+            "type": "shell",
+            "command": "./test/venv/bin/pytest",
+            "args": [
+                "-v",
+                "--tb=short"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            },
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": {
+                "owner": "pytest",
+                "fileLocation": [
+                    "relative",
+                    "${workspaceFolder}/test"
+                ],
+                "pattern": [
+                    {
+                        "regexp": "^(.*?):(\\d+): (.*)$",
+                        "file": 1,
+                        "line": 2,
+                        "message": 3
+                    }
+                ]
+            }
+        },
+        {
+            "label": "Run Current Test File",
+            "type": "shell",
+            "command": "./test/venv/bin/pytest",
+            "args": [
+                "${fileBasename}",
+                "-v"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            },
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                "$python"
+            ]
+        },
+        {
+            "label": "Run Basic Commands Tests",
+            "type": "shell",
+            "command": "./test/venv/bin/pytest",
+            "args": [
+                "test_basic_commands.py",
+                "-v"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            },
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                "$python"
+            ]
+        },
+        {
+            "label": "Run JFR Tests",
+            "type": "shell",
+            "command": "./test/venv/bin/pytest",
+            "args": [
+                "test_jfr.py",
+                "-v"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            },
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                "$python"
+            ]
+        },
+        {
+            "label": "Run Async-profiler Tests",
+            "type": "shell",
+            "command": "./test/venv/bin/pytest",
+            "args": [
+                "test_asprof.py",
+                "-v"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            },
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                "$python"
+            ]
+        },
+        {
+            "label": "Run Integration Tests",
+            "type": "shell",
+            "command": "./test/venv/bin/pytest",
+            "args": [
+                "test_cf_java_plugin.py",
+                "-v"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            },
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                "$python"
+            ]
+        },
+        {
+            "label": "Run Heap Tests (Pattern)",
+            "type": "shell",
+            "command": "./test/venv/bin/pytest",
+            "args": [
+                "-k",
+                "heap",
+                "-v"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            },
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                "$python"
+            ]
+        },
+        {
+            "label": "Run Profiling Tests (Pattern)",
+            "type": "shell",
+            "command": "./test/venv/bin/pytest",
+            "args": [
+                "-k",
+                "jfr or asprof",
+                "-v"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            },
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                "$python"
+            ]
+        },
+        {
+            "label": "Setup Virtual Environment",
+            "type": "shell",
+            "command": "./test/setup.sh",
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Clean Test Artifacts",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "rm -rf .pytest_cache __pycache__ framework/__pycache__ test_report.html .test_success_cache.json && find . -name '*.hprof' -delete 2>/dev/null || true && find . -name '*.jfr' -delete 2>/dev/null || true"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            },
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Interactive Test Runner",
+            "type": "shell",
+            "command": "./test/venv/bin/python",
+            "args": [
+                "test_runner.py"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            },
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Run Tests in Parallel",
+            "type": "shell",
+            "command": "./test/venv/bin/pytest",
+            "args": [
+                "-v",
+                "--tb=short",
+                "-n",
+                "auto"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            },
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                "$python"
+            ]
+        },
+        {
+            "label": "Generate HTML Test Report",
+            "type": "shell",
+            "command": "./test/venv/bin/pytest",
+            "args": [
+                "-v",
+                "--html=test_report.html",
+                "--self-contained-html"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            },
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                "$python"
+            ]
+        },
+        {
+            "label": "Install/Update Dependencies",
+            "type": "shell",
+            "command": "./test/venv/bin/pip",
+            "args": [
+                "install",
+                "-r",
+                "requirements.txt",
+                "--upgrade"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            },
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Build Go Plugin",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "build"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                "$go"
+            ]
+        },
+        {
+            "label": "Run Tests with Fail-Fast",
+            "type": "shell",
+            "command": "./test/venv/bin/pytest",
+            "args": [
+                "-x",
+                "--tb=line",
+                "--capture=no",
+                "--showlocals",
+                "-v"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            },
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Tests with HTML Report and Fail-Fast",
+            "type": "shell",
+            "command": "./test/venv/bin/pytest",
+            "args": [
+                "-x",
+                "--tb=line",
+                "--capture=no",
+                "--showlocals",
+                "--html=test_report.html",
+                "--self-contained-html",
+                "-v"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/test"
+            },
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        }
+    ]
+}
