@@ -228,6 +228,21 @@ var commands = []Command{
 JMAP_COMMAND=$(find -executable -name jmap | head -1 | tr -d [:space:])
 # SAP JVM: Wrap everything in an if statement in case jvmmon is available
 JVMMON_COMMAND=$(find -executable -name jvmmon | head -1 | tr -d [:space:])
+# if we have neither jmap nor jvmmon, we cannot generate a heap dump and should exit with an error
+if [ -z "${JMAP_COMMAND}" ] && [ -z "${JVMMON_COMMAND}" ]; then
+  echo >&2 "jvmmon or jmap are required for generating heap dump, you can modify your application manifest.yaml on the 'JBP_CONFIG_OPEN_JDK_JRE' environment variable. This could be done like this:
+		---
+		applications:
+		- name: <APP_NAME>
+		  memory: 1G
+		  path: <PATH_TO_BUILD_ARTIFACT>
+		  buildpack: https://github.com/cloudfoundry/java-buildpack
+		  env:
+			JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/bionic/x86_64", version: 11.+ } }'
+		
+	"
+  exit 1
+fi
 if [ -n "${JMAP_COMMAND}" ]; then
 OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=@FILE_NAME $(pidof java) ) || STATUS_CODE=$?
 if [ ! -s @FILE_NAME ]; then echo >&2 ${OUTPUT}; exit 1; fi
@@ -248,8 +263,24 @@ fi`,
 		Name:          "thread-dump",
 		Description:   "Generate a thread dump from a running Java application",
 		GenerateFiles: false,
-		SshCommand: "JSTACK_COMMAND=`find -executable -name jstack | head -1`; if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi; " +
-			"JVMMON_COMMAND=`find -executable -name jvmmon | head -1`; if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi",
+		SshCommand: `JSTACK_COMMAND=$(find -executable -name jstack | head -1);
+		JVMMON_COMMAND=$(find -executable -name jvmmon | head -1) 
+		if [ -z "${JMAP_COMMAND}" ] && [ -z "${JVMMON_COMMAND}" ]; then
+		echo >&2 "jvmmon or jmap are required for generating heap dump, you can modify your application manifest.yaml on the 'JBP_CONFIG_OPEN_JDK_JRE' environment variable. This could be done like this:
+				---
+				applications:
+				- name: <APP_NAME>
+				memory: 1G
+				path: <PATH_TO_BUILD_ARTIFACT>
+				buildpack: https://github.com/cloudfoundry/java-buildpack
+				env:
+					JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/bionic/x86_64", version: 11.+ } }'
+				
+			"
+		exit 1
+		fi
+		if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi;
+		if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi`,
 	},
 	{
 		Name:          "vm-info",

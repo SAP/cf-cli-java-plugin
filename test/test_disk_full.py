@@ -31,13 +31,13 @@ class DiskFullContext:
 class TestDiskFull(TestBase):
     """Tests for disk full scenarios."""
 
-    @test("all", no_restart=True)
+    @test(no_restart=True)
     def test_heap_dump(self, t, app):
         """Test JFR functionality with disk full simulation."""
         with DiskFullContext(app):
             t.run(f"heap-dump {app}").should_fail().should_contain("No space left on device").no_files()
 
-    @test("all", no_restart=True)
+    @test(no_restart=True)
     def test_jfr(self, t, app):
         """Test JFR start with disk full simulation."""
         with DiskFullContext(app):
@@ -45,8 +45,8 @@ class TestDiskFull(TestBase):
             time.sleep(2)
             t.run(f"jfr-stop {app}").should_fail().no_files()
 
-    @test("sapmachine21", no_restart=True)
-    def test_asprofile(self, t, app):
+    @test(no_restart=True)
+    def test_asprof(self, t, app):
         """Test ASProfile with disk full simulation."""
         with DiskFullContext(app):
             t.run(f"asprof-start-wall {app}")

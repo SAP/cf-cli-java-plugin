@@ -21,7 +21,7 @@ from framework.runner import TestBase
 class TestDryRunConsistency(TestBase):
     """Test that all commands support --dry-run consistently."""
 
-    @test("all")
+    @test
     def test_all_commands_support_dry_run(self, t, app):
         """Test that all major commands support --dry-run flag."""
         commands = [
@@ -49,7 +49,7 @@ class TestDryRunConsistency(TestBase):
 class TestWorkflows(TestBase):
     """Integration tests for complete workflows."""
 
-    @test("all")
+    @test
     def test_diagnostic_data_collection_workflow(self, t, app):
         """Test collecting comprehensive diagnostic data."""
         # 1. Collect VM information
@@ -68,7 +68,7 @@ class TestWorkflows(TestBase):
         # 5. Capture performance data
         t.run(f"jfr-stop {app} --local-dir .").should_succeed().should_create_file(f"{app}-jfr-*.jfr")
 
-    @test("sapmachine21")
+    @test
     def test_performance_analysis_workflow(self, t, app):
         """Test performance analysis workflow with async-profiler."""
         # 1. Baseline: Get VM vitals
@@ -88,7 +88,7 @@ class TestWorkflows(TestBase):
         # 5. Follow up with memory analysis
         t.run(f"heap-dump {app} --local-dir .").should_succeed().should_create_file(f"{app}-heapdump-*.hprof")
 
-    @test("all")
+    @test
     def test_concurrent_operations_safety(self, t, app):
         """Test that concurrent operations don't interfere."""
         # Start JFR recording

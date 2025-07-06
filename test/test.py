@@ -556,6 +556,14 @@ def disk_full(ctx):
 
 @cli.command()
 @click.pass_context
+def jre21(ctx):
+    """Run JRE21-specific tests."""
+    click.echo(f"{GREEN}Running JRE21 tests...")
+    return run_command([str(PYTEST), "test_jre21.py"] + ctx.obj["pytest_args"])
+
+
+@cli.command()
+@click.pass_context
 def all(ctx):
     """Run all tests."""
     click.echo(f"{GREEN}Running all tests...")

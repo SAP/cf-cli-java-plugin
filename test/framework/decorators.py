@@ -13,22 +13,25 @@ import pytest
 
 
 def test(*apps, no_restart=False):
-    """Ultra-minimal test decorator.
+    """Test decorator.
 
     Usage:
-        @test("all")
-        @test("sapmachine11", "sapmachine21")
-        @test("all", no_restart=True)  # Skip app restart after test
+        @test
+        @test(no_restart=True)  # Skip app restart after test
 
     Args:
-        *apps: App names to test on ("all", "sapmachine11", "sapmachine21")
+        *apps: App names to test on, defaults to "sapmachine21"
         no_restart: If True, skip app restart after test
     """
 
     # Determine which apps to test
     if "all" in apps or not apps:
         test_apps = get_available_apps()
+    elif not apps:
+        # If no apps specified, default to sapmachine21
+        test_apps = ["sapmachine21"]
     else:
+        # Use the provided apps directly
         test_apps = list(apps)
 
     def decorator(test_func):

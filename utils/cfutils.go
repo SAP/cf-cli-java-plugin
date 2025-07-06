@@ -134,25 +134,7 @@ func (checker CfJavaPluginUtilImpl) CheckRequiredTools(app string) (bool, error)
 	if enabled, ok := result["enabled"].(bool); !ok || !enabled {
 		return false, errors.New("ssh is not enabled for app: '" + app + "', please run below 2 shell commands to enable ssh and try again(please note application should be restarted before take effect):\ncf enable-ssh " + app + "\ncf restart " + app)
 	}
-
-	output, err = exec.Command("cf", "ssh", app, "-c", "find -executable | grep -E '(.*jmap$)|(.*jvmmon$)'").Output()
-	if err != nil {
-		return false, errors.New(fmt.Sprintf("Unknown error occured while checking existence of required tools jvmmon/jmap: %s", output))
-	}
-	if !strings.Contains(string(output[:]), "/") {
-		return false, errors.New(`jvmmon or jmap are required for generating heap dump, you can modify your application manifest.yaml on the 'JBP_CONFIG_OPEN_JDK_JRE' environment variable. This could be done like this:
-		---
-		applications:
-		- name: <APP_NAME>
-		  memory: 1G
-		  path: <PATH_TO_BUILD_ARTIFACT>
-		  buildpack: https://github.com/cloudfoundry/java-buildpack
-		  env:
-			JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/bionic/x86_64", version: 11.+ } }'
-		
-		`)
-	}
-
+	
 	return true, nil
 }
 

@@ -64,6 +64,7 @@ Example output:
 - **`test_asprof.py`** - Async-profiler tests (SapMachine only)
 - **`test_cf_java_plugin.py`** - Integration and workflow tests
 - **`test_disk_full.py`** - Tests for disk full scenarios (e.g., heap dump with no space left)
+- ** `test_jre21.py`** - JRE21/non-SapMachine21-specific tests (e.g., heap dump, thread dump, etc.)
 
 ## Test Selection & Execution
 
@@ -158,7 +159,7 @@ from framework.decorators import test
 from framework.runner import TestBase
 
 class TestExample(TestBase):
-    @test("all")  # or @test("sapmachine21")
+    @test  # or @test(ine21")
     def test_heap_dump_basic(self, t, app):
         t.heap_dump("--local-dir .") \
             .should_succeed() \
