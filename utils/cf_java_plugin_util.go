@@ -43,7 +43,7 @@ func FuzzySearch(needle string, words []string, max int) []string {
 	}
 
 	results := make([]string, 0, max)
-	for i := 0; i < max; i++ {
+	for i := range max {
 		results = append(results, matches[i].word)
 	}
 

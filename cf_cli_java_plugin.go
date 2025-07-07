@@ -539,7 +539,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	verbose := commandFlags.IsSet("verbose")
 
 	// Helper function for verbose logging with format strings
-	logVerbose := func(format string, args ...interface{}) {
+	logVerbose := func(format string, args ...any) {
 		if verbose {
 			fmt.Printf("[VERBOSE] "+format+"\n", args...)
 		}
