@@ -91,7 +91,7 @@ class TestWorkflows(TestBase):
     @test()
     def test_concurrent_operations_safety(self, t, app):
         """Test that concurrent operations don't interfere."""
-        # Start JFR recording
+        # Start JFR recordingx
         t.run(f"jfr-start {app}").should_succeed()
 
         # Other operations should work while JFR is recording
