@@ -13,6 +13,7 @@ test_dir = os.path.dirname(os.path.abspath(__file__))
 if test_dir not in sys.path:
     sys.path.insert(0, test_dir)
 
+# noqa: E402
 from framework.runner import CFJavaTestSession
 
 # Global test session instance

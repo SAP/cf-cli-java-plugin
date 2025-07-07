@@ -26,8 +26,11 @@ if not sys.executable.startswith(str(SCRIPT_DIR / "venv")):
         print("❌ Virtual environment not found. Run: ./test.py setup")
         sys.exit(1)
 
+# noqa: E402
 import click
+# noqa: E402
 import colorama
+# noqa: E402
 from colorama import Fore, Style
 
 # Initialize colorama for cross-platform colored output

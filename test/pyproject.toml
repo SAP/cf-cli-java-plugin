@@ -29,7 +29,7 @@ testpaths = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-norecursedirs = ["framework", "__pycache__", ".git"]
+norecursedirs = ["framework", "__pycache__", ".git", "venv"]
 markers = [
     "all: runs on all Java versions",
     "sapmachine21: requires SapMachine 21",
