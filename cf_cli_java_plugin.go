@@ -25,6 +25,9 @@ import (
 	"github.com/simonleung8/flags"
 )
 
+// Assert that JavaPlugin implements plugin.Plugin.
+var _ plugin.Plugin = (*JavaPlugin)(nil)
+
 // The JavaPlugin is a cf cli plugin that supports taking heap and thread dumps on demand
 type JavaPlugin struct{}
 
