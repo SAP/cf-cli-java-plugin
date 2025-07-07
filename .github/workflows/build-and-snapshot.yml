@@ -50,7 +50,7 @@ jobs:
         run: |
           cd test
           source venv/bin/activate
-          ./scripts/lint-python.sh ci
+          ../scripts/lint-python.sh ci
 
 #      - name: Run Python tests
 #        if: steps.check-tests.outputs.tests_exist == 'true'
