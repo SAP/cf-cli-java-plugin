@@ -28,8 +28,10 @@ if not sys.executable.startswith(str(SCRIPT_DIR / "venv")):
 
 # noqa: E402
 import click
+
 # noqa: E402
 import colorama
+
 # noqa: E402
 from colorama import Fore, Style
 

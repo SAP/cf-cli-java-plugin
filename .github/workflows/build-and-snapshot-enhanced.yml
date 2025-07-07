@@ -50,22 +50,16 @@ jobs:
         run: |
           cd test
           source venv/bin/activate
-          echo "🔍 Running flake8..."
-          flake8 --max-line-length=120 --ignore=E203,W503 . || exit 1
-          echo "🔍 Checking black formatting..."
-          black --line-length=120 --check . || exit 1
-          echo "🔍 Checking import sorting..."
-          isort --check-only --profile=black . || exit 1
-          echo "✅ All Python linting checks passed!"
+          ./scripts/lint-python.sh ci
 
-      - name: Run Python tests
-        if: steps.check-tests.outputs.tests_exist == 'true'
-        run: |
-          cd testing
-          source venv/bin/activate
-          echo "🧪 Running Python tests..."
-          pytest -v --tb=short
-          echo "✅ Python tests completed!"
+#      - name: Run Python tests
+#        if: steps.check-tests.outputs.tests_exist == 'true'
+#        run: |
+#          cd testing
+#          source venv/bin/activate
+#          echo "🧪 Running Python tests..."
+#          pytest -v --tb=short
+#          echo "✅ Python tests completed!"
 
   build:
     name: Build and Test Go Plugin

@@ -88,7 +88,7 @@ class TestWorkflows(TestBase):
         # 5. Follow up with memory analysis
         t.run(f"heap-dump {app} --local-dir .").should_succeed().should_create_file(f"{app}-heapdump-*.hprof")
 
-    @test
+    @test()
     def test_concurrent_operations_safety(self, t, app):
         """Test that concurrent operations don't interfere."""
         # Start JFR recording
