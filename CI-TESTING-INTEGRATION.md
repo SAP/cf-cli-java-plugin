@@ -105,7 +105,7 @@ git push origin feature-branch
 ./test-vscode-config.sh
 
 # Run specific tests
-cd testing && pytest test_jfr.py -v
+cd test && pytest test_jfr.py -v
 ```
 
 ## 📊 Quality Metrics

@@ -16,7 +16,7 @@ def test(*apps, no_restart=False):
     """Test decorator.
 
     Usage:
-        @test
+        @test()
         @test(no_restart=True)  # Skip app restart after test
 
     Args:

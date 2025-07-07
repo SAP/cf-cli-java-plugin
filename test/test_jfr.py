@@ -17,14 +17,14 @@ from framework.runner import TestBase
 class TestJFRBasic(TestBase):
     """Basic JFR functionality tests."""
 
-    @test
+    @test()
     def test_status_no_recording(self, t, app):
         """Test JFR status when no recording is active."""
         t.run(f"jfr-status {app}").should_succeed().should_match(
             r"No available recordings\.\s*Use jcmd \d+ JFR\.start to start a recording\."
         ).no_files()
 
-    @test
+    @test()
     def test_status_with_active_recording(self, t, app):
         """Test JFR status shows active recording information."""
         # Start recording
@@ -38,7 +38,7 @@ class TestJFRBasic(TestBase):
             "*.jfr"
         ).should_create_no_files()
 
-    @test
+    @test()
     def test_jfr_dump(self, t, app):
         """Test JFR dump functionality."""
         # Start recording
@@ -57,7 +57,7 @@ class TestJFRBasic(TestBase):
             "*.jfr"
         ).should_create_no_remote_files()
 
-    @test
+    @test()
     def test_concurrent_recordings_prevention(self, t, app):
         """Test that concurrent JFR recordings are prevented."""
         # Start first recording
@@ -69,13 +69,13 @@ class TestJFRBasic(TestBase):
         # Clean up - stop the first recording
         t.run(f"jfr-stop {app} --no-download").should_succeed()
 
-    @test
+    @test()
     def test_gc_profile(self, t, app):
         """Test JFR GC profile (SapMachine only)."""
         t.run(f"jfr-start-gc {app}").should_succeed().no_files()
         t.run(f"jfr-stop {app} --no-download").should_succeed().should_create_remote_file("*.jfr")
 
-    @test
+    @test()
     def test_gc_details_profile(self, t, app):
         """Test JFR detailed GC profile (SapMachine only)."""
         t.run(f"jfr-start-gc-details {app}").should_succeed().no_files()

@@ -259,7 +259,7 @@ class TestAsprofCommand(TestBase):
             "cpu.jfr"
         ).should_create_file("alloc.jfr")
 
-    @test
+    @test()
     def test_asprof_keep_remote_files(self, t, app):
         """Test keeping remote files with asprof."""
         # Generate a file and keep it
@@ -281,19 +281,19 @@ class TestAsprofCommand(TestBase):
 class TestAsprofEdgeCases(TestBase):
     """Edge cases and error conditions for async-profiler."""
 
-    @test
+    @test()
     def test_asprof_start_commands_file_flags_validation(self, t, app):
         """Test that asprof-start commands reject inappropriate file flags."""
         # asprof-start commands have GenerateFiles=false, so some file flags should be rejected
         for flag in ["--keep", "--no-download"]:
             t.run(f"asprof-start-cpu {app} {flag}").should_fail().should_contain("not supported for asprof-start-cpu")
 
-    # @test
+    # @test()
     # def test_asprof_stop_requires_prior_start(self, t, app):
     #    """Test asprof-stop behavior when no profiling is active."""
     #    t.run(f"asprof-stop {app}").should_fail().should_contain("[ERROR] Profiler has not started").no_files()
 
-    @test
+    @test()
     def test_asprof_different_event_types(self, t, app):
         """Test CPU event type via asprof command."""
         # Test CPU event type

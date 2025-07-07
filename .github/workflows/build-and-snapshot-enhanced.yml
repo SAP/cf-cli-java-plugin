@@ -48,7 +48,7 @@ jobs:
       - name: Run Python linting
         if: steps.check-tests.outputs.tests_exist == 'true'
         run: |
-          cd testing
+          cd test
           source venv/bin/activate
           echo "🔍 Running flake8..."
           flake8 --max-line-length=120 --ignore=E203,W503 . || exit 1
