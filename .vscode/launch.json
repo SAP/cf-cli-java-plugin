@@ -1,0 +1,244 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Current Test File",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "${file}",
+                "-v",
+                "--tb=short"
+            ],
+            "python": "${workspaceFolder}/test/venv/bin/python",
+            "cwd": "${workspaceFolder}/test",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/test"
+            },
+            "justMyCode": false
+        },
+        {
+            "name": "Debug Current Test Method",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "${file}::${input:testClass}::${input:testMethod}",
+                "-v",
+                "--tb=long",
+                "-s"
+            ],
+            "python": "${workspaceFolder}/test/venv/bin/python",
+            "cwd": "${workspaceFolder}/test",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/test"
+            },
+            "justMyCode": false
+        },
+        {
+            "name": "Run All Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "-v",
+                "--tb=short"
+            ],
+            "python": "${workspaceFolder}/test/venv/bin/python",
+            "cwd": "${workspaceFolder}/test",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/test"
+            },
+            "justMyCode": false
+        },
+        {
+            "name": "Run Basic Commands Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "test_basic_commands.py",
+                "-v"
+            ],
+            "python": "${workspaceFolder}/test/venv/bin/python",
+            "cwd": "${workspaceFolder}/test",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/test"
+            }
+        },
+        {
+            "name": "Run JFR Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "test_jfr.py",
+                "-v"
+            ],
+            "python": "${workspaceFolder}/test/venv/bin/python",
+            "cwd": "${workspaceFolder}/test",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/test"
+            }
+        },
+        {
+            "name": "Run Async-profiler Tests (SapMachine)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "test_asprof.py",
+                "-v"
+            ],
+            "python": "${workspaceFolder}/test/venv/bin/python",
+            "cwd": "${workspaceFolder}/test",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/test"
+            }
+        },
+        {
+            "name": "Run Integration Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "test_cf_java_plugin.py",
+                "-v"
+            ],
+            "python": "${workspaceFolder}/test/venv/bin/python",
+            "cwd": "${workspaceFolder}/test",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/test"
+            }
+        },
+        {
+            "name": "Run Snapshot Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "-k",
+                "snapshot",
+                "-v"
+            ],
+            "python": "${workspaceFolder}/test/venv/bin/python",
+            "cwd": "${workspaceFolder}/test",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/test"
+            }
+        },
+        {
+            "name": "Run Heap Tests (Pattern)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "-k",
+                "heap",
+                "-v"
+            ],
+            "python": "${workspaceFolder}/test/venv/bin/python",
+            "cwd": "${workspaceFolder}/test",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/test"
+            }
+        },
+        {
+            "name": "Run Profiling Tests (Pattern)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "-k",
+                "jfr or asprof",
+                "-v"
+            ],
+            "python": "${workspaceFolder}/test/venv/bin/python",
+            "cwd": "${workspaceFolder}/test",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/test"
+            }
+        },
+        {
+            "name": "Update Snapshots",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "-k",
+                "snapshot",
+                "--snapshot-update",
+                "-v"
+            ],
+            "python": "${workspaceFolder}/test/venv/bin/python",
+            "cwd": "${workspaceFolder}/test",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/test"
+            }
+        },
+        {
+            "name": "Interactive Test Runner",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/test/test_runner.py",
+            "python": "${workspaceFolder}/test/venv/bin/python",
+            "cwd": "${workspaceFolder}/test",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/test"
+            }
+        },
+        {
+            "name": "Debug Custom Filter",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "-k",
+                "${input:testFilter}",
+                "-v",
+                "--tb=long",
+                "-s"
+            ],
+            "python": "${workspaceFolder}/test/venv/bin/python",
+            "cwd": "${workspaceFolder}/test",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/test"
+            },
+            "justMyCode": false
+        }
+    ],
+    "inputs": [
+        {
+            "id": "testClass",
+            "description": "Test class name (e.g., TestHeapDump)",
+            "default": "TestHeapDump",
+            "type": "promptString"
+        },
+        {
+            "id": "testMethod",
+            "description": "Test method name (e.g., test_basic_download)",
+            "default": "test_basic_download",
+            "type": "promptString"
+        },
+        {
+            "id": "testFilter",
+            "description": "Custom test filter (e.g., 'heap and download', 'jfr or asprof')",
+            "default": "heap",
+            "type": "promptString"
+        }
+    ]
+}

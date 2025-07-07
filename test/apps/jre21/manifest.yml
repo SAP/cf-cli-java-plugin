@@ -1,0 +1,12 @@
+---
+applications:
+- name: jre21
+  random-route: true
+  path: test.jar
+  memory: 1024M
+  buildpacks:
+  - https://github.com/cloudfoundry/java-buildpack.git
+  env:
+    TARGET_RUNTIME: tomcat
+    JBP_CONFIG_COMPONENTS: '{jres: ["JavaBuildpack::Jre::OpenJdkJRE"]}'
+    JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 21.+ } }'

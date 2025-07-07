@@ -1,0 +1,36 @@
+[
+    {
+        "key": "ctrl+shift+t",
+        "command": "workbench.action.tasks.runTask",
+        "args": "Run Current Test File"
+    },
+    {
+        "key": "ctrl+shift+a",
+        "command": "workbench.action.tasks.runTask",
+        "args": "Run All Tests"
+    },
+    {
+        "key": "ctrl+shift+c",
+        "command": "workbench.action.tasks.runTask",
+        "args": "Clean Test Artifacts"
+    },
+    {
+        "key": "ctrl+shift+r",
+        "command": "workbench.action.tasks.runTask",
+        "args": "Interactive Test Runner"
+    },
+    {
+        "key": "f6",
+        "command": "workbench.action.debug.start",
+        "args": {
+            "name": "Debug Current Test File"
+        }
+    },
+    {
+        "key": "shift+f6",
+        "command": "workbench.action.debug.start",
+        "args": {
+            "name": "Debug Custom Filter"
+        }
+    }
+]

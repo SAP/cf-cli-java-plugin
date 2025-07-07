@@ -1,0 +1,127 @@
+{
+    "CF Java Test Method": {
+        "prefix": "cftest",
+        "body": [
+            "@test(\"${1:all}\")",
+            "def test_${2:name}(self, t, app):",
+            "    \"\"\"${3:Test description}.\"\"\"",
+            "    t.${4:command}() \\",
+            "        .should_succeed() \\",
+            "        .should_contain(\"${5:expected_text}\")",
+            "$0"
+        ],
+        "description": "Create a CF Java Plugin test method"
+    },
+    "CF Java Heap Dump Test": {
+        "prefix": "cfheap",
+        "body": [
+            "@test(\"${1:all}\")",
+            "def test_heap_dump_${2:scenario}(self, t, app):",
+            "    \"\"\"Test heap dump ${3:description}.\"\"\"",
+            "    t.heap_dump(\"${4:--local-dir .}\") \\",
+            "        .should_succeed() \\",
+            "        .should_create_file(f\"{app}-heapdump-*.hprof\") \\",
+            "        .should_create_no_remote_files()",
+            "$0"
+        ],
+        "description": "Create a heap dump test"
+    },
+    "CF Java JFR Test": {
+        "prefix": "cfjfr",
+        "body": [
+            "@test(\"${1:all}\")",
+            "def test_jfr_${2:scenario}(self, t, app):",
+            "    \"\"\"Test JFR ${3:description}.\"\"\"",
+            "    # Start recording",
+            "    t.jfr_start(${4:}).should_succeed()",
+            "    ",
+            "    time.sleep(${5:1})",
+            "    ",
+            "    # Stop and verify",
+            "    t.jfr_stop(\"--local-dir .\") \\",
+            "        .should_succeed() \\",
+            "        .should_create_file(f\"{app}-jfr-*.jfr\")",
+            "$0"
+        ],
+        "description": "Create a JFR test"
+    },
+    "CF Java Async-profiler Test": {
+        "prefix": "cfasprof",
+        "body": [
+            "@test(\"sapmachine21\")",
+            "def test_asprof_${1:scenario}(self, t, app):",
+            "    \"\"\"Test async-profiler ${2:description}.\"\"\"",
+            "    # Start profiling",
+            "    t.asprof_start(\"${3:cpu}\").should_succeed()",
+            "    ",
+            "    time.sleep(${4:1})",
+            "    ",
+            "    # Stop and verify",
+            "    t.asprof_stop(\"--local-dir .\") \\",
+            "        .should_succeed() \\",
+            "        .should_create_file(f\"{app}-asprof-*.jfr\")",
+            "$0"
+        ],
+        "description": "Create an async-profiler test"
+    },
+    "CF Java Test Class": {
+        "prefix": "cftestclass",
+        "body": [
+            "class Test${1:ClassName}(TestBase):",
+            "    \"\"\"${2:Test class description}.\"\"\"",
+            "    ",
+            "    @test(\"${3:all}\")",
+            "    def test_${4:method_name}(self, t, app):",
+            "        \"\"\"${5:Test method description}.\"\"\"",
+            "        ${0:pass}",
+            ""
+        ],
+        "description": "Create a CF Java Plugin test class"
+    },
+    "Import CF Java Framework": {
+        "prefix": "cfimport",
+        "body": [
+            "import time",
+            "from framework.runner import TestBase",
+            "from framework.decorators import test",
+            "$0"
+        ],
+        "description": "Import CF Java Plugin test framework"
+    },
+    "CF Java Time Sleep": {
+        "prefix": "cfsleep",
+        "body": [
+            "time.sleep(${1:1})  # Wait for ${2:operation} to complete"
+        ],
+        "description": "Add a time.sleep with comment"
+    },
+    "CF Java Cleanup": {
+        "prefix": "cfcleanup",
+        "body": [
+            "# Clean up",
+            "t.${1:jfr_stop}(\"--no-download\").should_succeed()"
+        ],
+        "description": "Add cleanup code for tests"
+    },
+    "CF Java Multi-Step Test": {
+        "prefix": "cfmulti",
+        "body": [
+            "@test(\"${1:all}\")",
+            "def test_${2:name}_workflow(self, t, app):",
+            "    \"\"\"Test ${3:description} complete workflow.\"\"\"",
+            "    # Step 1: ${4:Start operation}",
+            "    t.${5:command}().should_succeed()",
+            "    ",
+            "    # Step 2: ${6:Verify state}",
+            "    time.sleep(${7:1})",
+            "    t.${8:status}().should_succeed().should_contain(\"${9:expected}\")",
+            "    ",
+            "    # Step 3: ${10:Complete operation}",
+            "    t.${11:stop}(\"${12:--local-dir .}\") \\",
+            "        .should_succeed() \\",
+            "        .should_create_file(\"${13:*.jfr}\")",
+            "$0"
+        ],
+        "description": "Create a multi-step workflow test"
+    }
+}

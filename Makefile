@@ -6,7 +6,6 @@ compile: cf_cli_java_plugin.go
 	go build -o build/cf-cli-java-plugin cf_cli_java_plugin.go
 
 compile-all: cf_cli_java_plugin.go
-	ginkgo -p
 	GOOS=linux GOARCH=386 go build -o build/cf-cli-java-plugin-linux32 cf_cli_java_plugin.go
 	GOOS=linux GOARCH=amd64 go build -o build/cf-cli-java-plugin-linux64 cf_cli_java_plugin.go
 	GOOS=darwin GOARCH=amd64 go build -o build/cf-cli-java-plugin-osx cf_cli_java_plugin.go

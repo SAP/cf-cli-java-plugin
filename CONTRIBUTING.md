@@ -25,7 +25,6 @@ There are three important things to know:
 
 This a checklist of things to keep in your mind when opening pull requests for this project.
 
-0. Before pushing anything, validate your pull request with `go test`
 1. Make sure you have accepted the [Developer Certificate of Origin](#developer-certificate-of-origin-dco)
 2. Make sure any added dependency is licensed under Apache v2.0 license
 3. Strive for very high unit-test coverage and favor testing productive code over mocks

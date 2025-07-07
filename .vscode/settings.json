@@ -1,0 +1,139 @@
+{
+    // Python interpreter and environment - adjusted for root folder
+    "python.defaultInterpreterPath": "./test/venv/bin/python",
+    "python.terminal.activateEnvironment": true,
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    // Testing configuration - adjusted paths for root folder
+    "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestArgs": [
+        "./test",
+        "-v",
+        "--tb=short"
+    ],
+    "python.testing.autoTestDiscoverOnSaveEnabled": true,
+    "python.testing.pytestPath": "./test/venv/bin/python",
+    "python.testing.cwd": "${workspaceFolder}/test",
+    // Enhanced Python language support
+    "python.analysis.extraPaths": [
+        "./test/framework",
+        "./test",
+        "./test/apps"
+    ],
+    "python.autoComplete.extraPaths": [
+        "./test/framework",
+        "./test",
+        "./test/apps"
+    ],
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.completeFunctionParens": true,
+    "python.analysis.autoSearchPaths": true,
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.stubPath": "./test",
+    "python.analysis.include": [
+        "./test"
+    ],
+    // Linting and formatting
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": true,
+    "python.linting.flake8Args": [
+        "--max-line-length=120",
+        "--ignore=E203,W503"
+    ],
+    "python.linting.flake8Path": "./test/venv/bin/flake8",
+    "python.formatting.provider": "black",
+    "python.formatting.blackPath": "./test/venv/bin/black",
+    "python.formatting.blackArgs": [
+        "--line-length=120"
+    ],
+    // Editor settings
+    "editor.formatOnSave": true,
+    "editor.rulers": [
+        120
+    ],
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit"
+    },
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    // File associations
+    "files.associations": {
+        "*.yml": "yaml",
+        "*.yaml": "yaml",
+        "*.go": "go",
+        "Makefile": "makefile",
+        "*.pyi": "python",
+        "test_*.py": "python",
+        "conftest.py": "python"
+    },
+    // File exclusions for better performance
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/*.pyc": true,
+        "**/*.pyo": true,
+        "test/.pytest_cache": true,
+        "test/venv": true,
+        "*.hprof": true,
+        "*.jfr": true,
+        "**/.DS_Store": true,
+        "build/": true
+    },
+    // Search exclusions
+    "search.exclude": {
+        "**/venv": true,
+        "test/venv": true,
+        "**/__pycache__": true,
+        "test/.pytest_cache": true,
+        "**/*.hprof": true,
+        "**/*.jfr": true,
+        "build/": true
+    },
+    // Environment variables for integrated terminal
+    "terminal.integrated.env.osx": {
+        "PYTHONPATH": "${workspaceFolder}/test:${workspaceFolder}/test/framework"
+    },
+    "terminal.integrated.env.linux": {
+        "PYTHONPATH": "${workspaceFolder}/test:${workspaceFolder}/test/framework"
+    },
+    "terminal.integrated.env.windows": {
+        "PYTHONPATH": "${workspaceFolder}/test;${workspaceFolder}/test/framework"
+    },
+    // Go language support for main project
+    "go.gopath": "${workspaceFolder}",
+    "go.goroot": "",
+    "go.formatTool": "goimports",
+    "go.lintTool": "golint",
+    // YAML schema validation
+    "yaml.schemas": {
+        "./test/test_config.yml.example": [
+            "test/test_config.yml"
+        ]
+    },
+    // IntelliSense settings
+    "editor.quickSuggestions": {
+        "other": "on",
+        "comments": "off",
+        "strings": "on"
+    },
+    "editor.parameterHints.enabled": true,
+    "editor.suggestOnTriggerCharacters": true,
+    "editor.wordBasedSuggestions": "matchingDocuments",
+    // Python-specific IntelliSense enhancements
+    "python.jediEnabled": false,
+    "python.languageServer": "Pylance",
+    "python.analysis.indexing": true,
+    "python.analysis.userFileIndexingLimit": 2000,
+    "python.analysis.packageIndexDepths": [
+        {
+            "name": "",
+            "depth": 2,
+            "includeAllSymbols": true
+        }
+    ],
+    // Additional Pylance settings for better IntelliSense
+    "python.analysis.logLevel": "Information",
+    "python.analysis.symbolsHierarchyDepthLimit": 10,
+    "python.analysis.importFormat": "relative"
+}

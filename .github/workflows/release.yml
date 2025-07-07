@@ -24,16 +24,16 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: "3.x"
 
       - name: Install dependencies
         run: go mod tidy -e || true
 
       - name: Lint Go files
-        run: go fmt ./...
+        run: ./scripts/lint-go.sh check
 
       - name: Run tests
-        run: go test
+        run: ./scripts/lint-go.sh test
 
       - name: Build binary
         run: python3 .github/workflows/build.py
@@ -44,4 +44,3 @@ jobs:
           files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          

@@ -1,11 +1,10 @@
 package utils
 
 import (
+	"github.com/lithammer/fuzzysearch/fuzzy"
 	"sort"
 	"strings"
-	"github.com/lithammer/fuzzysearch/fuzzy"
 )
-
 
 type CfJavaPluginUtil interface {
 	FindReasonForAccessError(app string) string
@@ -59,5 +58,5 @@ func JoinWithOr(a []string) string {
 	if len(a) == 1 {
 		return a[0]
 	}
-	return strings.Join(a[:len(a) - 1], ", ") + ", or " + a[len(a) - 1]
+	return strings.Join(a[:len(a)-1], ", ") + ", or " + a[len(a)-1]
 }
