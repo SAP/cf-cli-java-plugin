@@ -25,7 +25,7 @@ def test(*apps, no_restart=False):
     """
 
     # Determine which apps to test
-    if "all" in apps or not apps:
+    if "all" in apps:
         test_apps = get_available_apps()
     elif not apps:
         # If no apps specified, default to sapmachine21
@@ -33,6 +33,8 @@ def test(*apps, no_restart=False):
     else:
         # Use the provided apps directly
         test_apps = list(apps)
+
+    print(f"🔍 TEST DECORATOR: Running tests for apps: {test_apps}  ")
 
     def decorator(test_func):
         # Create a wrapper that matches pytest's expected signature

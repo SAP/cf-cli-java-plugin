@@ -28,6 +28,13 @@ class FluentAssertion:
     def should_succeed(self) -> "FluentAssertion":
         """Assert that the command succeeded."""
         if self.result.failed:
+            # Check for SSH auth errors that should skip the test instead of failing
+            ssh_auth_error = "Error getting one time auth code: Error getting SSH code: Error requesting one time code from server:"
+            
+            if ssh_auth_error in self.result.stderr or ssh_auth_error in self.result.stdout:
+                import pytest
+                pytest.skip(f"Test skipped due to SSH auth error (CF platform issue): {ssh_auth_error}")
+            
             raise AssertionError(
                 f"Expected command to succeed, but it failed with code {self.result.returncode}:\n"
                 f"Command: {self.result.command}\n"
