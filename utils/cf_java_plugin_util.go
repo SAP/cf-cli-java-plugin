@@ -6,18 +6,6 @@ import (
 	"strings"
 )
 
-type CfJavaPluginUtil interface {
-	FindReasonForAccessError(app string) string
-	CheckRequiredTools(app string) (bool, error)
-	GetAvailablePath(data string, userpath string) (string, error)
-	CopyOverCat(args []string, src string, dest string) error
-	DeleteRemoteFile(args []string, path string) error
-	FindHeapDumpFile(args []string, fullpath string, fspath string) (string, error)
-	FindJFRFile(args []string, fullpath string, fspath string) (string, error)
-	FindFile(args []string, fullpath string, fspath string, pattern string) (string, error)
-	ListFiles(args []string, path string) ([]string, error)
-}
-
 // FuzzySearch returns up to `max` words from `words` that are closest in
 // Levenshtein distance to `needle`.
 func FuzzySearch(needle string, words []string, max int) []string {
@@ -43,7 +31,7 @@ func FuzzySearch(needle string, words []string, max int) []string {
 	}
 
 	results := make([]string, 0, max)
-	for i := 0; i < max; i++ {
+	for i := range max {
 		results = append(results, matches[i].word)
 	}
 

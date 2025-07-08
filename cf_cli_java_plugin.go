@@ -25,8 +25,13 @@ import (
 	"github.com/simonleung8/flags"
 )
 
+// Assert that JavaPlugin implements plugin.Plugin.
+var _ plugin.Plugin = (*JavaPlugin)(nil)
+
 // The JavaPlugin is a cf cli plugin that supports taking heap and thread dumps on demand
-type JavaPlugin struct{}
+type JavaPlugin struct{
+	verbose bool
+}
 
 // UUIDGenerator is an interface that encapsulates the generation of UUIDs
 type UUIDGenerator interface {
@@ -86,49 +91,39 @@ const (
 // 1 should the plugin exit nonzero.
 func (c *JavaPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 	// Check if verbose flag is in args for early logging
-	verbose := false
 	for _, arg := range args {
 		if arg == "-v" || arg == "--verbose" {
-			verbose = true
+			c.verbose = true
 			break
 		}
 	}
 
-	if verbose {
+	if c.verbose {
 		fmt.Printf("[VERBOSE] Run called with args: %v\n", args)
 	}
 
-	_, err := c.DoRun(&commandExecutorImpl{cliConnection: cliConnection}, &uuidGeneratorImpl{}, utils.CfJavaPluginUtilImpl{}, args)
+	_, err := c.DoRun(&commandExecutorImpl{cliConnection: cliConnection}, &uuidGeneratorImpl{}, args)
 	if err != nil {
-		if verbose {
+		if c.verbose {
 			fmt.Printf("[VERBOSE] Error occurred: %v\n", err)
 		}
 		os.Exit(1)
 	}
-	if verbose {
+	if c.verbose {
 		fmt.Printf("[VERBOSE] Run completed successfully\n")
 	}
 }
 
 // DoRun is an internal method that we use to wrap the cmd package with CommandExecutor for test purposes
-func (c *JavaPlugin) DoRun(commandExecutor cmd.CommandExecutor, uuidGenerator UUIDGenerator, util utils.CfJavaPluginUtil, args []string) (string, error) {
+func (c *JavaPlugin) DoRun(commandExecutor cmd.CommandExecutor, uuidGenerator UUIDGenerator, args []string) (string, error) {
 	traceLogger := trace.NewLogger(os.Stdout, true, os.Getenv("CF_TRACE"), "")
 	ui := terminal.NewUI(os.Stdin, os.Stdout, terminal.NewTeePrinter(os.Stdout), traceLogger)
 
-	// Check if verbose flag is in args for early logging
-	verbose := false
-	for _, arg := range args {
-		if arg == "-v" || arg == "--verbose" {
-			verbose = true
-			break
-		}
-	}
-
-	if verbose {
+	if c.verbose {
 		fmt.Printf("[VERBOSE] DoRun called with args: %v\n", args)
 	}
 
-	output, err := c.execute(commandExecutor, uuidGenerator, util, args)
+	output, err := c.execute(commandExecutor, uuidGenerator, args)
 	if err != nil {
 		if err.Error() == "unexpected EOF" {
 			return output, err
@@ -491,7 +486,7 @@ func toSentenceCase(input string) string {
 	return strings.ToUpper(string(input[0])) + strings.ToLower(input[1:])
 }
 
-func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator UUIDGenerator, util utils.CfJavaPluginUtil, args []string) (string, error) {
+func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator UUIDGenerator, args []string) (string, error) {
 	if len(args) == 0 {
 		return "", &InvalidUsageError{message: "No command provided"}
 	}
@@ -536,7 +531,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	verbose := commandFlags.IsSet("verbose")
 
 	// Helper function for verbose logging with format strings
-	logVerbose := func(format string, args ...interface{}) {
+	logVerbose := func(format string, args ...any) {
 		if verbose {
 			fmt.Printf("[VERBOSE] "+format+"\n", args...)
 		}
@@ -637,7 +632,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 	logVerbose("CF SSH arguments: %v", cfSSHArguments)
 
-	supported, err := util.CheckRequiredTools(applicationName)
+	supported, err := utils.CheckRequiredTools(applicationName)
 
 	if err != nil || !supported {
 		return "required tools checking failed", err
@@ -670,7 +665,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 	// Initialize fspath and fileName for commands that need them
 	if command.GenerateFiles || command.NeedsFileName || command.GenerateArbitraryFiles {
 		logVerbose("Command requires file generation")
-		fspath, err = util.GetAvailablePath(applicationName, remoteDir)
+		fspath, err = utils.GetAvailablePath(applicationName, remoteDir)
 		if err != nil {
 			return "", fmt.Errorf("failed to get available path: %w", err)
 		}
@@ -745,10 +740,10 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		switch command.FileExtension {
 		case ".hprof":
 			logVerbose("Finding heap dump file")
-			finalFile, err = util.FindHeapDumpFile(cfSSHArguments, fileName, fspath)
+			finalFile, err = utils.FindHeapDumpFile(cfSSHArguments, fileName, fspath)
 		case ".jfr":
 			logVerbose("Finding JFR file")
-			finalFile, err = util.FindJFRFile(cfSSHArguments, fileName, fspath)
+			finalFile, err = utils.FindJFRFile(cfSSHArguments, fileName, fspath)
 		default:
 			return "", &InvalidUsageError{message: fmt.Sprintf("Unsupported file extension %q", command.FileExtension)}
 		}
@@ -764,7 +759,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 		localFileFullPath := localDir + "/" + applicationName + "-" + command.FileNamePart + "-" + uuidGenerator.Generate() + command.FileExtension
 		logVerbose("Downloading file to: %s", localFileFullPath)
-		err = util.CopyOverCat(cfSSHArguments, fileName, localFileFullPath)
+		err = utils.CopyOverCat(cfSSHArguments, fileName, localFileFullPath)
 		if err == nil {
 			logVerbose("File download completed successfully")
 			fmt.Println(toSentenceCase(command.FileLabel) + " file saved to: " + localFileFullPath)
@@ -775,7 +770,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 		if !keepAfterDownload {
 			logVerbose("Deleting remote file")
-			err = util.DeleteRemoteFile(cfSSHArguments, fileName)
+			err = utils.DeleteRemoteFile(cfSSHArguments, fileName)
 			if err != nil {
 				logVerbose("Failed to delete remote file: %v", err)
 				return "", err
@@ -790,7 +785,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		logVerbose("Processing arbitrary files download: %s", fspath)
 		logVerbose("cfSSHArguments: %v", cfSSHArguments)
 		// download all files in the generic folder
-		files, err := util.ListFiles(cfSSHArguments, fspath)
+		files, err := utils.ListFiles(cfSSHArguments, fspath)
 		for i, file := range files {
 			logVerbose("File %d: %s", i+1, file)
 		}
@@ -803,7 +798,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			for _, file := range files {
 				logVerbose("Downloading file: %s", file)
 				localFileFullPath := localDir + "/" + file
-				err = util.CopyOverCat(cfSSHArguments, fspath+"/"+file, localFileFullPath)
+				err = utils.CopyOverCat(cfSSHArguments, fspath+"/"+file, localFileFullPath)
 				if err == nil {
 					logVerbose("File %s downloaded successfully", file)
 					fmt.Printf("File %s saved to: %s\n", file, localFileFullPath)
@@ -815,7 +810,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 
 			if !keepAfterDownload {
 				logVerbose("Deleting remote file folder")
-				err = util.DeleteRemoteFile(cfSSHArguments, fspath)
+				err = utils.DeleteRemoteFile(cfSSHArguments, fspath)
 				if err != nil {
 					logVerbose("Failed to delete remote folder: %v", err)
 					return "", err
@@ -902,7 +897,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 	}
 }
 
-// Unlike most Go programs, the `Main()` function will not be used to run all of the
+// Unlike most Go programs, the `main()` function will not be used to run all of the
 // commands provided in your plugin. Main will be used to initialize the plugin
 // process, as well as any dependencies you might require for your
 // plugin.
