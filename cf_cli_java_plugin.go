@@ -29,7 +29,9 @@ import (
 var _ plugin.Plugin = (*JavaPlugin)(nil)
 
 // The JavaPlugin is a cf cli plugin that supports taking heap and thread dumps on demand
-type JavaPlugin struct{}
+type JavaPlugin struct{
+	verbose bool
+}
 
 // UUIDGenerator is an interface that encapsulates the generation of UUIDs
 type UUIDGenerator interface {
@@ -89,26 +91,25 @@ const (
 // 1 should the plugin exit nonzero.
 func (c *JavaPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 	// Check if verbose flag is in args for early logging
-	verbose := false
 	for _, arg := range args {
 		if arg == "-v" || arg == "--verbose" {
-			verbose = true
+			c.verbose = true
 			break
 		}
 	}
 
-	if verbose {
+	if c.verbose {
 		fmt.Printf("[VERBOSE] Run called with args: %v\n", args)
 	}
 
 	_, err := c.DoRun(&commandExecutorImpl{cliConnection: cliConnection}, &uuidGeneratorImpl{}, utils.CfJavaPluginUtilImpl{}, args)
 	if err != nil {
-		if verbose {
+		if c.verbose {
 			fmt.Printf("[VERBOSE] Error occurred: %v\n", err)
 		}
 		os.Exit(1)
 	}
-	if verbose {
+	if c.verbose {
 		fmt.Printf("[VERBOSE] Run completed successfully\n")
 	}
 }
@@ -118,16 +119,7 @@ func (c *JavaPlugin) DoRun(commandExecutor cmd.CommandExecutor, uuidGenerator UU
 	traceLogger := trace.NewLogger(os.Stdout, true, os.Getenv("CF_TRACE"), "")
 	ui := terminal.NewUI(os.Stdin, os.Stdout, terminal.NewTeePrinter(os.Stdout), traceLogger)
 
-	// Check if verbose flag is in args for early logging
-	verbose := false
-	for _, arg := range args {
-		if arg == "-v" || arg == "--verbose" {
-			verbose = true
-			break
-		}
-	}
-
-	if verbose {
+	if c.verbose {
 		fmt.Printf("[VERBOSE] DoRun called with args: %v\n", args)
 	}
 
