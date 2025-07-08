@@ -10,8 +10,6 @@ import (
 	"strings"
 )
 
-type CfJavaPluginUtilImpl struct{}
-
 type CFAppEnv struct {
 	EnvironmentVariables struct {
 		JbpConfigSpringAutoReconfiguration string `json:"JBP_CONFIG_SPRING_AUTO_RECONFIGURATION"`
@@ -90,14 +88,14 @@ func checkUserPathAvailability(app string, path string) (bool, error) {
 	return false, nil
 }
 
-func (checker CfJavaPluginUtilImpl) FindReasonForAccessError(app string) string {
+func FindReasonForAccessError(app string) string {
 	out, err := exec.Command("cf", "apps").Output()
 	if err != nil {
 		return "cf is not logged in, please login and try again"
 	}
 	// find all app names
 	lines := strings.Split(string(out[:]), "\n")
-	appNames := make([]string, 100)
+	appNames := []string{}
 	foundHeader := false
 	for _, line := range lines {
 		if foundHeader && len(line) > 0 {
@@ -116,17 +114,19 @@ func (checker CfJavaPluginUtilImpl) FindReasonForAccessError(app string) string 
 	return "Could not find " + app + ". Did you mean " + matches[0] + "?"
 }
 
-func (checker CfJavaPluginUtilImpl) CheckRequiredTools(app string) (bool, error) {
+func CheckRequiredTools(app string) (bool, error) {
 	guid, err := exec.Command("cf", "app", app, "--guid").Output()
 	if err != nil {
-		return false, errors.New(checker.FindReasonForAccessError(app))
+		return false, errors.New(FindReasonForAccessError(app))
 	}
 	output, err := exec.Command("cf", "curl", "/v3/apps/"+strings.TrimSuffix(string(guid), "\n")+"/ssh_enabled").Output()
 	if err != nil {
 		return false, err
 	}
 	var result map[string]any
-	json.Unmarshal([]byte(output), &result)
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		return false, err
+	}
 
 	if enabled, ok := result["enabled"].(bool); !ok || !enabled {
 		return false, errors.New("ssh is not enabled for app: '" + app + "', please run below 2 shell commands to enable ssh and try again(please note application should be restarted before take effect):\ncf enable-ssh " + app + "\ncf restart " + app)
@@ -135,7 +135,7 @@ func (checker CfJavaPluginUtilImpl) CheckRequiredTools(app string) (bool, error)
 	return true, nil
 }
 
-func (checker CfJavaPluginUtilImpl) GetAvailablePath(data string, userpath string) (string, error) {
+func GetAvailablePath(data string, userpath string) (string, error) {
 	if len(userpath) > 0 {
 		valid, _ := checkUserPathAvailability(data, userpath)
 		if valid {
@@ -151,7 +151,9 @@ func (checker CfJavaPluginUtilImpl) GetAvailablePath(data string, userpath strin
 	}
 
 	var cfAppEnv CFAppEnv
-	json.Unmarshal(env, &cfAppEnv)
+	if err := json.Unmarshal(env, &cfAppEnv); err != nil {
+		return "", err
+	}
 
 	for _, v := range cfAppEnv.SystemEnvJSON.VcapServices.FsStorage {
 		for _, v2 := range v.VolumeMounts {
@@ -164,7 +166,7 @@ func (checker CfJavaPluginUtilImpl) GetAvailablePath(data string, userpath strin
 	return "/tmp", nil
 }
 
-func (checker CfJavaPluginUtilImpl) CopyOverCat(args []string, src string, dest string) error {
+func CopyOverCat(args []string, src string, dest string) error {
 	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		return errors.New("Error creating local file at  " + dest + ". Please check that you are allowed to create files at the given local path.")
@@ -189,7 +191,7 @@ func (checker CfJavaPluginUtilImpl) CopyOverCat(args []string, src string, dest 
 	return nil
 }
 
-func (checker CfJavaPluginUtilImpl) DeleteRemoteFile(args []string, path string) error {
+func DeleteRemoteFile(args []string, path string) error {
 	args = append(args, "rm -fr "+path)
 	_, err := exec.Command("cf", args...).Output()
 	if err != nil {
@@ -199,15 +201,15 @@ func (checker CfJavaPluginUtilImpl) DeleteRemoteFile(args []string, path string)
 	return nil
 }
 
-func (checker CfJavaPluginUtilImpl) FindHeapDumpFile(args []string, fullpath string, fspath string) (string, error) {
-	return checker.FindFile(args, fullpath, fspath, "java_pid*.hprof")
+func FindHeapDumpFile(args []string, fullpath string, fspath string) (string, error) {
+	return FindFile(args, fullpath, fspath, "java_pid*.hprof")
 }
 
-func (checker CfJavaPluginUtilImpl) FindJFRFile(args []string, fullpath string, fspath string) (string, error) {
-	return checker.FindFile(args, fullpath, fspath, "*.jfr")
+func FindJFRFile(args []string, fullpath string, fspath string) (string, error) {
+	return FindFile(args, fullpath, fspath, "*.jfr")
 }
 
-func (checker CfJavaPluginUtilImpl) FindFile(args []string, fullpath string, fspath string, pattern string) (string, error) {
+func FindFile(args []string, fullpath string, fspath string, pattern string) (string, error) {
 	cmd := " [ -f '" + fullpath + "' ] && echo '" + fullpath + "' ||  find " + fspath + " -name '" + pattern + "' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1 "
 
 	args = append(args, cmd)
@@ -219,7 +221,7 @@ func (checker CfJavaPluginUtilImpl) FindFile(args []string, fullpath string, fsp
 	return strings.Trim(string(output[:]), "\n"), nil
 }
 
-func (checker CfJavaPluginUtilImpl) ListFiles(args []string, path string) ([]string, error) {
+func ListFiles(args []string, path string) ([]string, error) {
 	cmd := "ls " + path
 	args = append(args, cmd)
 	output, err := exec.Command("cf", args...).Output()
