@@ -25,6 +25,17 @@ A modern, efficient testing framework for the CF Java Plugin using Python and py
 ./test.py --start-with TestClass::test_method all  # Start with a specific test (inclusive)
 ```
 
+## Possible Problems
+
+The following error might occur when connected to the SAP internal network:
+
+```sh
+ ssh: handshake failed: read tcp 10.16.73.196:64531->18.157.52.48:2222: read: connection reset by peer
+```
+
+Just connect directly to the internet without the VPN.
+
+
 ## State of Testing
 
 - `heap-dump` is thoroughly tested, including all flags, so that less has to be tested for the other commands.
