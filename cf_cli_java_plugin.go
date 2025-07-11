@@ -873,8 +873,8 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 			Build: 0,
 		},
 		MinCliVersion: plugin.VersionType{
-			Major: 6,
-			Minor: 7,
+			Major: 4,
+			Minor: 0,
 			Build: 0,
 		},
 		Commands: []plugin.Command{

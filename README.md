@@ -374,7 +374,7 @@ Please do not create GitHub issues for security-related doubts or problems.
 
 ### Snapshot
 
-### 4.0.0-snapshot
+### 4.0.0
 
 - Create a proper test suite
 - Fix many bugs discovered during testing
