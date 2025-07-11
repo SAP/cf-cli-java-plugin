@@ -2,6 +2,11 @@ name: Manual Release
 
 on:
   workflow_dispatch: # Allows manual triggering
+    inputs:
+      version:
+        description: 'Release version (e.g., 3.0.4)'
+        required: true
+        type: string
 
 jobs:
   release:
@@ -26,6 +31,11 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyYAML requests
+
       - name: Install dependencies
         run: go mod tidy -e || true
 
@@ -38,9 +48,56 @@ jobs:
       - name: Build binary
         run: python3 .github/workflows/build.py
 
+      - name: Generate plugin repository YAML
+        if: matrix.os == 'ubuntu-latest'  # Only run on one platform
+        env:
+          GITHUB_REF_NAME: v${{ github.event.inputs.version }}
+        run: python3 .github/workflows/generate_plugin_repo.py
+
       - name: Create GitHub Release
+        if: matrix.os == 'ubuntu-latest'  # Only create release once
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/*
+          tag_name: v${{ github.event.inputs.version }}
+          name: Release v${{ github.event.inputs.version }}
+          files: |
+            dist/*
+            plugin-repo-entry.yml
+            plugin-repo-summary.txt
+          body: |
+            ## CF CLI Java Plugin v${{ github.event.inputs.version }}
+            
+            Plugin for profiling Java applications and getting heap and thread-dumps.
+            
+            ### Installation
+            
+            ```bash
+            cf install-plugin -r CF-Community java
+            ```
+            
+            Or download the appropriate binary for your platform and install manually:
+            
+            ```bash
+            cf install-plugin <path-to-binary>
+            ```
+            
+            ### Plugin Repository Entry
+            
+            The `plugin-repo-entry.yml` file contains the entry that should be added to the CF CLI plugin repository.
+            
+            ### Supported Platforms
+            
+            - Linux (32-bit and 64-bit)
+            - macOS (64-bit)
+            - Windows (32-bit and 64-bit)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload plugin repository artifacts
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v3
+        with:
+          name: plugin-repository-files
+          path: |
+            plugin-repo-entry.yml
+            plugin-repo-summary.txt
