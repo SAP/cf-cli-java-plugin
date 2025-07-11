@@ -29,7 +29,7 @@ import (
 var _ plugin.Plugin = (*JavaPlugin)(nil)
 
 // The JavaPlugin is a cf cli plugin that supports taking heap and thread dumps on demand
-type JavaPlugin struct{
+type JavaPlugin struct {
 	verbose bool
 }
 
@@ -732,7 +732,7 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 		return "", fmt.Errorf("Command execution failed: %w\nOutput: %s", err, strings.Join(output, "\n"))
 	}
 
-	if command.GenerateFiles && !noDownload {
+	if command.GenerateFiles {
 		logVerbose("Processing file generation and download")
 
 		finalFile := ""
@@ -751,10 +751,15 @@ func (c *JavaPlugin) execute(commandExecutor cmd.CommandExecutor, uuidGenerator 
 			fileName = finalFile
 			logVerbose("Found file: %s", finalFile)
 			fmt.Println("Successfully created " + command.FileLabel + " in application container at: " + fileName)
-		} else {
+		} else if !noDownload {
 			logVerbose("Failed to find file, error: %v", err)
 			fmt.Println("Failed to find " + command.FileLabel + " in application container")
 			return "", err
+		}
+
+		if noDownload {
+			fmt.Println("No download requested, skipping file download")
+			return strings.Join(output, "\n"), nil
 		}
 
 		localFileFullPath := localDir + "/" + applicationName + "-" + command.FileNamePart + "-" + uuidGenerator.Generate() + command.FileExtension

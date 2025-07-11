@@ -43,7 +43,7 @@ class TestHeapDump(TestBase):
         """Test heap dump without downloading - file stays remote."""
         t.run(f"heap-dump {app} --no-download").should_succeed().should_create_no_files().should_create_remote_file(
             "*.hprof"
-        )
+        ).should_contain("Successfully created heap dump").should_contain("No download requested")
 
     @test(no_restart=True)
     def test_custom_container_dir(self, t, app):
