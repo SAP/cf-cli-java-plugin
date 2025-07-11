@@ -8,6 +8,10 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   release:
     name: Create Proper Release on All Platforms
@@ -62,6 +66,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -74,6 +81,36 @@ jobs:
           source venv/bin/activate
           python3 -m pip install --upgrade pip
           pip install PyYAML requests
+
+      - name: Parse version and update Go source
+        run: |
+          # Parse version input (e.g., "4.1.0" -> major=4, minor=1, build=0)
+          VERSION="${{ github.event.inputs.version }}"
+          IFS='.' read -r MAJOR MINOR BUILD <<< "$VERSION"
+          
+          echo "Updating version to $MAJOR.$MINOR.$BUILD"
+          python3 .github/workflows/update_version.py "$MAJOR" "$MINOR" "$BUILD"
+          
+          # Configure git
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # Check if there are changes
+          if git diff --quiet; then
+            echo "No version changes detected"
+          else
+            echo "Committing version update"
+            git add cf_cli_java_plugin.go README.md
+            git commit -m "Set version to v$VERSION"
+            git push
+          fi
+
+      - name: Create and push tag
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          echo "Creating tag v$VERSION"
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v3
@@ -118,6 +155,10 @@ jobs:
             ## CF CLI Java Plugin v${{ github.event.inputs.version }}
             
             Plugin for profiling Java applications and getting heap and thread-dumps.
+            
+            ## Changes
+            
+            $(cat release_changelog.txt || echo "No changelog available")
             
             ## Installation
 
