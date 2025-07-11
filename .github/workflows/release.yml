@@ -34,7 +34,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install PyYAML requests
+          pip install PyYAML
 
       - name: Install dependencies
         run: go mod tidy -e || true
@@ -48,14 +48,57 @@ jobs:
       - name: Build binary
         run: python3 .github/workflows/build.py
 
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries-${{ matrix.os }}
+          path: dist/
+
+  create-release:
+    name: Create GitHub Release with Plugin Repository Entry
+    needs: release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyYAML
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts/
+
+      - name: Combine all artifacts
+        run: |
+          mkdir -p dist
+          find artifacts/ -type f -exec cp {} dist/ \;
+          ls -la dist/
+
       - name: Generate plugin repository YAML
-        if: matrix.os == 'ubuntu-latest'  # Only run on one platform
         env:
           GITHUB_REF_NAME: v${{ github.event.inputs.version }}
-        run: python3 .github/workflows/generate_plugin_repo.py
+        run: |
+          echo "📝 Generating plugin repository YAML file for version ${{ github.event.inputs.version }}..."
+          python3 .github/workflows/generate_plugin_repo.py
+          echo "✅ Plugin repository YAML generated"
+          echo ""
+          echo "Generated files:"
+          ls -la plugin-repo-*
+          echo ""
+          echo "Plugin repository entry preview:"
+          head -20 plugin-repo-entry.yml
 
       - name: Create GitHub Release
-        if: matrix.os == 'ubuntu-latest'  # Only create release once
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ github.event.inputs.version }}
@@ -85,19 +128,33 @@ jobs:
             
             The `plugin-repo-entry.yml` file contains the entry that should be added to the CF CLI plugin repository.
             
+            **To submit to CF CLI plugin repository:**
+            1. Fork [cli-plugin-repo](https://github.com/cloudfoundry-incubator/cli-plugin-repo)
+            2. Add the contents of `plugin-repo-entry.yml` to `repo-index.yml`
+            3. Create a pull request
+            
             ### Supported Platforms
             
             - Linux (32-bit and 64-bit)
             - macOS (64-bit)
             - Windows (32-bit and 64-bit)
+            
+            ### Checksums
+            
+            All binaries include SHA1 checksums for verification. See `plugin-repo-summary.txt` for details.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload plugin repository artifacts
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v3
-        with:
-          name: plugin-repository-files
-          path: |
-            plugin-repo-entry.yml
-            plugin-repo-summary.txt
+      - name: Create Summary Comment
+        run: |
+          echo "## 🚀 Release v${{ github.event.inputs.version }} Created Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Files Generated:" >> $GITHUB_STEP_SUMMARY
+          echo "- Release binaries for all platforms" >> $GITHUB_STEP_SUMMARY
+          echo "- \`plugin-repo-entry.yml\` - CF CLI plugin repository entry" >> $GITHUB_STEP_SUMMARY
+          echo "- \`plugin-repo-summary.txt\` - Human-readable summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download \`plugin-repo-entry.yml\` from the release" >> $GITHUB_STEP_SUMMARY
+          echo "2. Submit to CF CLI plugin repository" >> $GITHUB_STEP_SUMMARY
+          echo "3. Update documentation if needed" >> $GITHUB_STEP_SUMMARY

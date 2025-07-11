@@ -25,16 +25,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Check if Python tests exist
-        id: check-tests
-        run: |
-          if [ -f "test/requirements.txt" ] && [ -f "test/test.sh" ]; then
-            echo "tests_exist=true" >> $GITHUB_OUTPUT
-            echo "✅ Python test suite found"
-          else
-            echo "tests_exist=false" >> $GITHUB_OUTPUT
-            echo "⚠️  Python test suite not found - skipping tests"
-          fi
 
       - name: Setup Python test environment
         if: steps.check-tests.outputs.tests_exist == 'true'
@@ -46,20 +36,10 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Run Python linting
-        if: steps.check-tests.outputs.tests_exist == 'true'
         run: |
           cd test
           source venv/bin/activate
           ../scripts/lint-python.sh ci
-
-#      - name: Run Python tests
-#        if: steps.check-tests.outputs.tests_exist == 'true'
-#        run: |
-#          cd testing
-#          source venv/bin/activate
-#          echo "🧪 Running Python tests..."
-#          pytest -v --tb=short
-#          echo "✅ Python tests completed!"
 
   build:
     name: Build and Test Go Plugin
@@ -106,6 +86,19 @@ jobs:
     if: (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && (needs.lint-and-test-python.result == 'success' || needs.lint-and-test-python.result == 'skipped')
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies for plugin repo generation
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyYAML
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -115,6 +108,14 @@ jobs:
         run: |
           mkdir -p dist
           mv dist/*/* dist/ || true
+
+      - name: Generate plugin repository YAML for snapshot
+        env:
+          GITHUB_REF_NAME: snapshot
+        run: |
+          echo "📝 Generating plugin repository YAML file..."
+          python3 .github/workflows/generate_plugin_repo.py
+          echo "✅ Plugin repository YAML generated"
 
       - uses: thomashampson/delete-older-releases@main
         with:
@@ -128,7 +129,10 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/*
+          files: |
+            dist/*
+            plugin-repo-entry.yml
+            plugin-repo-summary.txt
           prerelease: false
           release: false
           tag_name: snapshot
@@ -140,6 +144,11 @@ jobs:
             ## Build Status
             - ✅ Go Plugin: Built and tested on Linux, macOS, and Windows
             - ✅ Python Tests: Linting and test suite validation completed
+            - ✅ Plugin Repository: YAML entry generated automatically
+
+            ## Plugin Repository Entry
+            The `plugin-repo-entry.yml` file contains the snapshot entry for the CF CLI plugin repository.
+            **Note:** This is a snapshot release - use the latest stable release for production.
 
             ## Changes
             This snapshot includes the latest commits from the repository.
