@@ -34,11 +34,9 @@ def generate_plugin_repo_yaml():
     
     # Define the binary platforms and their corresponding file extensions
     platforms = {
-        "osx": "cf-cli-java-plugin-osx",
-        "win64": "cf-cli-java-plugin-win64.exe", 
-        "win32": "cf-cli-java-plugin-win32.exe",
-        "linux32": "cf-cli-java-plugin-linux32",
-        "linux64": "cf-cli-java-plugin-linux64"
+        "linux64": "cf-cli-java-plugin-linux-amd64",
+        "osx": "cf-cli-java-plugin-macos-arm64", 
+        "win64": "cf-cli-java-plugin-windows-amd64.exe"
     }
     
     binaries = []
