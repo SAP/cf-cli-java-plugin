@@ -125,7 +125,7 @@ jobs:
 
       - name: Generate plugin repository YAML
         env:
-          GITHUB_REF_NAME: v${{ github.event.inputs.version }}
+          GITHUB_REF_NAME: ${{ github.event.inputs.version }}
         run: |
           source venv/bin/activate
           echo "📝 Generating plugin repository YAML file for version ${{ github.event.inputs.version }}..."
@@ -145,14 +145,14 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ github.event.inputs.version }}
-          name: Release v${{ github.event.inputs.version }}
+          tag_name: ${{ github.event.inputs.version }}
+          name: ${{ github.event.inputs.version }}
           files: |
             dist/*
             plugin-repo-entry.yml
             plugin-repo-summary.txt
           body: |
-            ## CF CLI Java Plugin v${{ github.event.inputs.version }}
+            ## CF CLI Java Plugin ${{ github.event.inputs.version }}
             
             Plugin for profiling Java applications and getting heap and thread-dumps.
             
@@ -176,15 +176,15 @@ jobs:
 
             ### Manual Installation
 
-            Download this specific release (v${{ github.event.inputs.version }}) and install manually:
+            Download this specific release (${{ github.event.inputs.version }}) and install manually:
 
             ```bash
             # on Mac arm64
-            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/v${{ github.event.inputs.version }}/cf-cli-java-plugin-macos-arm64
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/${{ github.event.inputs.version }}/cf-cli-java-plugin-macos-arm64
             # on Windows x86
-            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/v${{ github.event.inputs.version }}/cf-cli-java-plugin-windows-amd64
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/${{ github.event.inputs.version }}/cf-cli-java-plugin-windows-amd64
             # on Linux x86
-            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/v${{ github.event.inputs.version }}/cf-cli-java-plugin-linux-amd64
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/${{ github.event.inputs.version }}/cf-cli-java-plugin-linux-amd64
             ```
 
             Or download the latest release:
@@ -209,7 +209,7 @@ jobs:
 
       - name: Create Summary Comment
         run: |
-          echo "## 🚀 Release v${{ github.event.inputs.version }} Created Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Release ${{ github.event.inputs.version }} Created Successfully!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Files Generated:" >> $GITHUB_STEP_SUMMARY
           echo "- Release binaries for all platforms" >> $GITHUB_STEP_SUMMARY
