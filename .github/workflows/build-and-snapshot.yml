@@ -144,8 +144,8 @@ jobs:
             dist/*
             plugin-repo-entry.yml
             plugin-repo-summary.txt
-          prerelease: false
-          draft: true
+          prerelease: true
+          draft: false
           tag_name: snapshot
           body: |
             This is a snapshot release of the cf-cli-java-plugin.
