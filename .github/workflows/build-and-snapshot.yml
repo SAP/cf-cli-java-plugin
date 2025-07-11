@@ -112,6 +112,10 @@ jobs:
           GITHUB_REF_NAME: snapshot
         run: |
           echo "📝 Generating plugin repository YAML file..."
+          python3 -m venv venv
+          source venv/bin/activate
+          python3 -m pip install --upgrade pip
+          pip install PyYAML requests
           python3 .github/workflows/generate_plugin_repo.py
           echo "✅ Plugin repository YAML generated"
 
