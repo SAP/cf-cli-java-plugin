@@ -378,16 +378,9 @@ Please do not create GitHub issues for security-related doubts or problems.
 
 - Create a proper test suite
 - Fix many bugs discovered during testing
-
-### 4.0.0-rc2
-
-- Fix CI to allow proper downloading
-
-### 4.0.0-rc
-
 - Profiling and JCMD related features
-- Large refactoring
 
 ## License
+
 Copyright 2017 - 2025  SAP SE or an SAP affiliate company and contributors.
 Please see our LICENSE for copyright and license information.
