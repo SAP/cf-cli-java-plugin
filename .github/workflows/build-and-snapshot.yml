@@ -144,7 +144,7 @@ jobs:
             dist/*
             plugin-repo-entry.yml
             plugin-repo-summary.txt
-          prerelease: true
+          prerelease: false
           draft: false
           tag_name: snapshot
           body: |
@@ -152,9 +152,26 @@ jobs:
             It includes the latest changes and is not intended for production use.
             Please test it and provide feedback.
 
+            ## Installation
+
+            Download the current snapshot release and install manually:
+
+            ```sh
+            # on Mac arm64
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-macos-arm64
+            # on Windows x86
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-windows-amd64
+            # on Linux x86
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-linux-amd64
+            ```
+
+            **Note:** On Linux and macOS, if you get a permission error, run `chmod +x [cf-cli-java-plugin]` on the plugin binary.
+            On Windows, the plugin will refuse to install unless the binary has the `.exe` file extension.
+
+            You can verify that the plugin is successfully installed by looking for `java` in the output of `cf plugins`.
+
             ## Build Status
             - ✅ Go Plugin: Built on Linux, macOS, and Windows
-            - ✅ Python Tests: Linting and test suite validation completed
             - ✅ Plugin Repository: YAML entry generated automatically
 
             ## Plugin Repository Entry
@@ -163,6 +180,8 @@ jobs:
 
             ## Changes
             This snapshot includes the latest commits from the repository.
+            
+            **Build Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
           name: Snapshot Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

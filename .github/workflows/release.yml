@@ -90,6 +90,7 @@ jobs:
         env:
           GITHUB_REF_NAME: v${{ github.event.inputs.version }}
         run: |
+          source venv/bin/activate
           echo "📝 Generating plugin repository YAML file for version ${{ github.event.inputs.version }}..."
           python3 .github/workflows/generate_plugin_repo.py
           echo "✅ Plugin repository YAML generated"
@@ -114,36 +115,50 @@ jobs:
             
             Plugin for profiling Java applications and getting heap and thread-dumps.
             
-            ### Installation
-            
+            ## Installation
+
+            ### Installation via CF Community Repository
+
+            Make sure you have the CF Community plugin repository configured or add it via:
             ```bash
-            cf install-plugin -r CF-Community java
+            cf add-plugin-repo CF-Community http://plugins.cloudfoundry.org
             ```
-            
-            Or download the appropriate binary for your platform and install manually:
-            
+
+            Trigger installation of the plugin via:
             ```bash
-            cf install-plugin <path-to-binary>
+            cf install-plugin -r CF-Community "java"
             ```
-            
-            ### Plugin Repository Entry
-            
-            The `plugin-repo-entry.yml` file contains the entry that should be added to the CF CLI plugin repository.
-            
-            **To submit to CF CLI plugin repository:**
-            1. Fork [cli-plugin-repo](https://github.com/cloudfoundry-incubator/cli-plugin-repo)
-            2. Add the contents of `plugin-repo-entry.yml` to `repo-index.yml`
-            3. Create a pull request
-            
-            ### Supported Platforms
-            
-            - Linux (32-bit and 64-bit)
-            - macOS (64-bit)
-            - Windows (32-bit and 64-bit)
-            
-            ### Checksums
-            
-            All binaries include SHA1 checksums for verification. See `plugin-repo-summary.txt` for details.
+
+            ### Manual Installation
+
+            Download this specific release (v${{ github.event.inputs.version }}) and install manually:
+
+            ```bash
+            # on Mac arm64
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/v${{ github.event.inputs.version }}/cf-cli-java-plugin-macos-arm64
+            # on Windows x86
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/v${{ github.event.inputs.version }}/cf-cli-java-plugin-windows-amd64
+            # on Linux x86
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/v${{ github.event.inputs.version }}/cf-cli-java-plugin-linux-amd64
+            ```
+
+            Or download the latest release:
+
+            ```bash
+            # on Mac arm64
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/latest/download/cf-cli-java-plugin-macos-arm64
+            # on Windows x86
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/latest/download/cf-cli-java-plugin-windows-amd64
+            # on Linux x86
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/latest/download/cf-cli-java-plugin-linux-amd64
+            ```
+
+            **Note:** On Linux and macOS, if you get a permission error, run `chmod +x [cf-cli-java-plugin]` on the plugin binary.
+            On Windows, the plugin will refuse to install unless the binary has the `.exe` file extension.
+
+            You can verify that the plugin is successfully installed by looking for `java` in the output of `cf plugins`.
+
+            **Build Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
