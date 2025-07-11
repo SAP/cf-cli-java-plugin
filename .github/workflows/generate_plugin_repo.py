@@ -36,7 +36,7 @@ def generate_plugin_repo_yaml():
     platforms = {
         "linux64": "cf-cli-java-plugin-linux-amd64",
         "osx": "cf-cli-java-plugin-macos-arm64", 
-        "win64": "cf-cli-java-plugin-windows-amd64.exe"
+        "win64": "cf-cli-java-plugin-windows-amd64"
     }
     
     binaries = []
