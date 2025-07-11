@@ -119,6 +119,10 @@ jobs:
           python3 .github/workflows/generate_plugin_repo.py
           echo "✅ Plugin repository YAML generated"
 
+      - name: Generate timestamp
+        id: timestamp
+        run: echo "timestamp=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+
       - uses: thomashampson/delete-older-releases@main
         with:
           keep_latest: 0
@@ -152,6 +156,8 @@ jobs:
             It includes the latest changes and is not intended for production use.
             Please test it and provide feedback.
 
+            **Build Timestamp**: ${{ steps.timestamp.outputs.timestamp }}
+
             ## Installation
 
             Download the current snapshot release and install manually:
@@ -169,19 +175,7 @@ jobs:
             On Windows, the plugin will refuse to install unless the binary has the `.exe` file extension.
 
             You can verify that the plugin is successfully installed by looking for `java` in the output of `cf plugins`.
-
-            ## Build Status
-            - ✅ Go Plugin: Built on Linux, macOS, and Windows
-            - ✅ Plugin Repository: YAML entry generated automatically
-
-            ## Plugin Repository Entry
-            The `plugin-repo-entry.yml` file contains the snapshot entry for the CF CLI plugin repository.
-            **Note:** This is a snapshot release - use the latest stable release for production.
-
-            ## Changes
-            This snapshot includes the latest commits from the repository.
             
-            **Build Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
           name: Snapshot Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

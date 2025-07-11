@@ -101,6 +101,10 @@ jobs:
           echo "Plugin repository entry preview:"
           head -20 plugin-repo-entry.yml
 
+      - name: Generate timestamp
+        id: timestamp
+        run: echo "timestamp=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -158,7 +162,7 @@ jobs:
 
             You can verify that the plugin is successfully installed by looking for `java` in the output of `cf plugins`.
 
-            **Build Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+            **Build Timestamp**: ${{ steps.timestamp.outputs.timestamp }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
