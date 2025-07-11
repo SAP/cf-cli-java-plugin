@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""
+Update version in cf_cli_java_plugin.go for releases.
+This script updates the PluginMetadata version in the Go source code and processes the changelog.
+"""
+
+import sys
+import re
+from pathlib import Path
+
+def update_version_in_go_file(file_path, major, minor, build):
+    """Update the version in the Go plugin metadata."""
+    with open(file_path, 'r') as f:
+        content = f.read()
+    
+    # Pattern to match the Version struct in PluginMetadata
+    pattern = r'(Version: plugin\.VersionType\s*{\s*Major:\s*)\d+(\s*,\s*Minor:\s*)\d+(\s*,\s*Build:\s*)\d+(\s*,\s*})'
+    
+    replacement = rf'\g<1>{major}\g<2>{minor}\g<3>{build}\g<4>'
+    
+    new_content = re.sub(pattern, replacement, content)
+    
+    if new_content == content:
+        print(f"Warning: Version pattern not found or not updated in {file_path}")
+        return False
+    
+    with open(file_path, 'w') as f:
+        f.write(new_content)
+    
+    print(f"✅ Updated version to {major}.{minor}.{build} in {file_path}")
+    return True
+
+def process_readme_changelog(readme_path, version):
+    """Process the README changelog section for the release."""
+    with open(readme_path, 'r') as f:
+        content = f.read()
+    
+    # Look for the snapshot section
+    snapshot_pattern = rf'## {re.escape(version)}-snapshot\s*\n'
+    match = re.search(snapshot_pattern, content)
+    
+    if not match:
+        print(f"Error: README.md does not contain a '## {version}-snapshot' section")
+        return False, None
+    
+    # Find the content of the snapshot section
+    start_pos = match.end()
+    
+    # Find the next ## section or end of file
+    next_section_pattern = r'\n## '
+    next_match = re.search(next_section_pattern, content[start_pos:])
+    
+    if next_match:
+        end_pos = start_pos + next_match.start()
+        section_content = content[start_pos:end_pos].strip()
+    else:
+        section_content = content[start_pos:].strip()
+    
+    # Remove the "-snapshot" from the header
+    new_header = f"## {version}"
+    updated_content = re.sub(snapshot_pattern, new_header + '\n\n', content)
+    
+    # Write the updated README
+    with open(readme_path, 'w') as f:
+        f.write(updated_content)
+    
+    print(f"✅ Updated README.md: converted '## {version}-snapshot' to '## {version}'")
+    return True, section_content
+
+def get_base_version(version):
+    """Return the base version (e.g., 4.0.0 from 4.0.0-rc2)"""
+    return version.split('-')[0]
+
+def is_rc_version(version_str):
+    """Return True if the version string ends with -rc or -rcN."""
+    return bool(re.match(r"^\d+\.\d+\.\d+-rc(\d+)?$", version_str))
+
+def main():
+    if len(sys.argv) != 4:
+        print("Usage: update_version.py <major> <minor> <build>")
+        print("Example: update_version.py 4 1 0")
+        sys.exit(1)
+    
+    try:
+        major = int(sys.argv[1])
+        minor = int(sys.argv[2])
+        build = int(sys.argv[3])
+    except ValueError:
+        print("Error: Version numbers must be integers")
+        sys.exit(1)
+    
+    version = f"{major}.{minor}.{build}"
+    version_arg = f"{major}.{minor}.{build}" if (major + minor + build) != 0 else sys.argv[1]
+    # Accept any -rc suffix, e.g. 4.0.0-rc, 4.0.0-rc1, 4.0.0-rc2
+    if is_rc_version(sys.argv[1]):
+        base_version = get_base_version(sys.argv[1])
+        go_file = Path("cf_cli_java_plugin.go")
+        readme_file = Path("README.md")
+        changelog_file = Path("release_changelog.txt")
+        if not readme_file.exists():
+            print(f"Error: {readme_file} not found")
+            sys.exit(1)
+        with open(readme_file, 'r') as f:
+            content = f.read()
+        # Find the section for the base version
+        base_pattern = rf'## {re.escape(base_version)}\s*\n'
+        match = re.search(base_pattern, content)
+        if not match:
+            print(f"Error: README.md does not contain a '## {base_version}' section for RC release")
+            sys.exit(1)
+        start_pos = match.end()
+        next_match = re.search(r'\n## ', content[start_pos:])
+        if next_match:
+            end_pos = start_pos + next_match.start()
+            section_content = content[start_pos:end_pos].strip()
+        else:
+            section_content = content[start_pos:].strip()
+        with open(changelog_file, 'w') as f:
+            f.write(section_content)
+        print(f"✅ RC release: Changelog for {base_version} saved to {changelog_file}")
+        sys.exit(0)
+    
+    go_file = Path("cf_cli_java_plugin.go")
+    readme_file = Path("README.md")
+    changelog_file = Path("release_changelog.txt")
+    
+    # Update Go version
+    success = update_version_in_go_file(go_file, major, minor, build)
+    if not success:
+        sys.exit(1)
+    
+    # Process README changelog
+    success, changelog_content = process_readme_changelog(readme_file, version)
+    if not success:
+        sys.exit(1)
+    
+    # Write changelog content to a file for the workflow to use
+    with open(changelog_file, 'w') as f:
+        f.write(changelog_content)
+    
+    print(f"✅ Version updated successfully to {version}")
+    print(f"✅ Changelog content saved to {changelog_file}")
+
+if __name__ == "__main__":
+    main()

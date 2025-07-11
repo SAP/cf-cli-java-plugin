@@ -25,19 +25,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Check if Python tests exist
-        id: check-tests
-        run: |
-          if [ -f "test/requirements.txt" ] && [ -f "test/test.sh" ]; then
-            echo "tests_exist=true" >> $GITHUB_OUTPUT
-            echo "✅ Python test suite found"
-          else
-            echo "tests_exist=false" >> $GITHUB_OUTPUT
-            echo "⚠️  Python test suite not found - skipping tests"
-          fi
-
       - name: Setup Python test environment
-        if: steps.check-tests.outputs.tests_exist == 'true'
         run: |
           cd test
           python -m venv venv
@@ -46,20 +34,10 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Run Python linting
-        if: steps.check-tests.outputs.tests_exist == 'true'
         run: |
           cd test
           source venv/bin/activate
           ../scripts/lint-python.sh ci
-
-#      - name: Run Python tests
-#        if: steps.check-tests.outputs.tests_exist == 'true'
-#        run: |
-#          cd testing
-#          source venv/bin/activate
-#          echo "🧪 Running Python tests..."
-#          pytest -v --tb=short
-#          echo "✅ Python tests completed!"
 
   build:
     name: Build and Test Go Plugin
@@ -106,6 +84,19 @@ jobs:
     if: (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && (needs.lint-and-test-python.result == 'success' || needs.lint-and-test-python.result == 'skipped')
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies for plugin repo generation
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyYAML
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -116,6 +107,22 @@ jobs:
           mkdir -p dist
           mv dist/*/* dist/ || true
 
+      - name: Generate plugin repository YAML for snapshot
+        env:
+          GITHUB_REF_NAME: snapshot
+        run: |
+          echo "📝 Generating plugin repository YAML file..."
+          python3 -m venv venv
+          source venv/bin/activate
+          python3 -m pip install --upgrade pip
+          pip install PyYAML requests
+          python3 .github/workflows/generate_plugin_repo.py
+          echo "✅ Plugin repository YAML generated"
+
+      - name: Generate timestamp
+        id: timestamp
+        run: echo "timestamp=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+
       - uses: thomashampson/delete-older-releases@main
         with:
           keep_latest: 0
@@ -125,24 +132,50 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Delete and regenerate tag snapshot
+        run: |
+          echo "Deleting existing snapshot tag..."
+          git tag -d snapshot || true
+          git push origin :snapshot || true
+          echo "Regenerating snapshot tag..."
+          git tag snapshot
+          git push origin snapshot --force
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/*
+          files: |
+            dist/*
+            plugin-repo-entry.yml
+            plugin-repo-summary.txt
           prerelease: false
-          release: false
+          draft: false
           tag_name: snapshot
           body: |
             This is a snapshot release of the cf-cli-java-plugin.
             It includes the latest changes and is not intended for production use.
             Please test it and provide feedback.
 
-            ## Build Status
-            - ✅ Go Plugin: Built and tested on Linux, macOS, and Windows
-            - ✅ Python Tests: Linting and test suite validation completed
+            **Build Timestamp**: ${{ steps.timestamp.outputs.timestamp }}
 
-            ## Changes
-            This snapshot includes the latest commits from the repository.
+            ## Installation
+
+            Download the current snapshot release and install manually:
+
+            ```sh
+            # on Mac arm64
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-macos-arm64
+            # on Windows x86
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-windows-amd64
+            # on Linux x86
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-linux-amd64
+            ```
+
+            **Note:** On Linux and macOS, if you get a permission error, run `chmod +x [cf-cli-java-plugin]` on the plugin binary.
+            On Windows, the plugin will refuse to install unless the binary has the `.exe` file extension.
+
+            You can verify that the plugin is successfully installed by looking for `java` in the output of `cf plugins`.
+            
           name: Snapshot Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

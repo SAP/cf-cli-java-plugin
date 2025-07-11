@@ -1,0 +1,56 @@
+name: Generate Plugin Repository Entry
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  generate-plugin-repo:
+    name: Generate Plugin Repository YAML
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyYAML requests
+
+      - name: Download release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p dist
+          # Download all release assets
+          gh release download ${{ github.event.release.tag_name }} -D dist/
+
+      - name: Generate plugin repository YAML
+        env:
+          GITHUB_REF_NAME: ${{ github.event.release.tag_name }}
+        run: python3 .github/workflows/generate_plugin_repo.py
+
+      - name: Upload plugin repository files to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.event.release.tag_name }} plugin-repo-entry.yml plugin-repo-summary.txt
+
+      - name: Create PR to plugin repository (optional)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Plugin repository entry generated!"
+          echo "To submit to CF CLI plugin repository:"
+          echo "1. Fork https://github.com/cloudfoundry-incubator/cli-plugin-repo"
+          echo "2. Add the contents of plugin-repo-entry.yml to repo-index.yml"
+          echo "3. Create a pull request"
+          echo ""
+          echo "Entry content:"
+          cat plugin-repo-entry.yml
