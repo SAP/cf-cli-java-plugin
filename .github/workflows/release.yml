@@ -108,9 +108,9 @@ jobs:
       - name: Create and push tag
         run: |
           VERSION="${{ github.event.inputs.version }}"
-          echo "Creating tag v$VERSION"
-          git tag "v$VERSION"
-          git push origin "v$VERSION"
+          echo "Creating tag $VERSION"
+          git tag "$VERSION"
+          git push origin "$VERSION"
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
