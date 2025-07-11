@@ -25,19 +25,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Check if Python tests exist
-        id: check-tests
-        run: |
-          if [ -f "test/requirements.txt" ] && [ -f "test/test.sh" ]; then
-            echo "tests_exist=true" >> $GITHUB_OUTPUT
-            echo "✅ Python test suite found"
-          else
-            echo "tests_exist=false" >> $GITHUB_OUTPUT
-            echo "⚠️  Python test suite not found - skipping tests"
-          fi
-
       - name: Setup Python test environment
-        if: steps.check-tests.outputs.tests_exist == 'true'
         run: |
           cd test
           python -m venv venv
@@ -46,7 +34,6 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Run Python linting
-        if: steps.check-tests.outputs.tests_exist == 'true'
         run: |
           cd test
           source venv/bin/activate
