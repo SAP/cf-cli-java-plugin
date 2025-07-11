@@ -4,7 +4,7 @@ on:
   workflow_dispatch: # Allows manual triggering
     inputs:
       version:
-        description: 'Release version (e.g., 3.0.4)'
+        description: 'Release version (e.g., 3.0.4), you must have a changelog ready for this version (e.h. 3.0.4-snapshot-20231001)'
         required: true
         type: string
 
