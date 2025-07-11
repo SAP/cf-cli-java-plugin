@@ -44,10 +44,10 @@ jobs:
         run: go mod tidy -e || true
 
       - name: Lint Go files
-        run: ./scripts/lint-go.sh check
+        run: ./scripts/lint-go.sh ci
 
       - name: Run tests
-        run: ./scripts/lint-go.sh test
+        run: ./scripts/lint-go.sh ci
 
       - name: Build binary
         run: python3 .github/workflows/build.py
