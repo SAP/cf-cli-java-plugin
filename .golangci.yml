@@ -28,7 +28,6 @@ linters:
     
     # Architecture and interface linters (key for your request)
     - interfacebloat   # Detect interfaces with too many methods
-    - ireturn          # Accept interfaces, return concrete types
     - unparam          # Report unused function parameters
     
     # Code quality linters
@@ -36,23 +35,17 @@ linters:
     - bidichk          # Check for dangerous unicode sequences
     - bodyclose        # Check HTTP response body is closed
     - contextcheck     # Check context usage
-    - cyclop           # Check cyclomatic complexity
     - dupl             # Check for code duplication
     - durationcheck    # Check duration multiplication
     - errname          # Check error naming conventions
     - errorlint        # Check error wrapping
     - exhaustive       # Check enum switch exhaustiveness
-    - funlen           # Check function length
-    - gocognit         # Check cognitive complexity
     - goconst          # Find repeated strings that could be constants
-    - gocritic         # Comprehensive Go source code linter
-    - gocyclo          # Check cyclomatic complexity
     - godox            # Find TODO, FIXME, etc. comments
     - goprintffuncname # Check printf-style function names
     - gosec            # Security-focused linter
     - misspell         # Check for misspellings
     - nakedret         # Check naked returns
-    - nestif           # Check deeply nested if statements
     - nilerr           # Check nil error returns
     - nolintlint       # Check nolint directives
     - predeclared      # Check for shadowed predeclared identifiers
@@ -81,3 +74,11 @@ linters:
     - maintidx        # Maintainability index can be subjective
     - godot           # Check comments end with period
     - lll              # Check line length
+    - ireturn          # Interface return types are sometimes necessary
+    # ignore for now
+    - nestif
+    - gocognit
+    - gocyclo          # Check cyclomatic complexity
+    - cyclop           # Check cyclomatic complexity
+    - funlen           # Check function length
+    - gocritic

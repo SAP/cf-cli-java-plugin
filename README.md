@@ -214,7 +214,11 @@ USAGE:
      jcmd (supports --args)
         Run a JCMD command on a running Java application via --args, downloads
         and deletes all files that are created in the current folder, use
-        '--no-download' to prevent this
+        '--no-download' to prevent this. Environment variables available:
+        @FSPATH (writable directory path, always set), @ARGS (command
+        arguments), @APP_NAME (application name), @FILE_NAME (generated filename
+        for file operations without UUID), and @STATIC_FILE_NAME (without UUID).
+        Use single quotes around --args to prevent shell expansion.
 
      jfr-start
         Start a Java Flight Recorder default recording on a running Java
@@ -255,7 +259,11 @@ USAGE:
         the current folder. Don't use in combination with asprof-* commands.
         Downloads and deletes all files that are created in the current folder,
         if not using 'start' asprof command, use '--no-download' to prevent
-        this.
+        this. Environment variables available: @FSPATH (writable directory path,
+        always set), @ARGS (command arguments), @APP_NAME (application name),
+        @FILE_NAME (generated filename for file operations), and
+        @STATIC_FILE_NAME (without UUID). Use single quotes around --args to
+        prevent shell expansion.
 
      asprof-start-cpu (recent SapMachine only)
         Start an async-profiler CPU-time profile recording on a running Java
@@ -280,9 +288,12 @@ USAGE:
         Get the status of async-profiler on a running Java application
 
 OPTIONS:
-   -app-instance-index       -i, [index], select to which instance of the app to connect
    -args                     -a, Miscellaneous arguments to pass to the command (if supported) in the
-                               container, be aware to end it with a space if it is a simple option
+                               container, be aware to end it with a space if it is a simple option. For
+                               commands that create arbitrary files (jcmd, asprof), the environment
+                               variables @FSPATH, @ARGS, @APP_NAME, @FILE_NAME, and @STATIC_FILE_NAME are
+                               available in --args to reference the working directory path, arguments,
+                               application name, and generated file name respectively.
    -container-dir            -cd, the directory path in the container that the heap dump/JFR/... file will be
                                 saved to
    -dry-run                  -n, just output to command line what would be executed
@@ -293,6 +304,7 @@ OPTIONS:
    -no-download              -nd, don't download the heap dump/JFR/... file to local, only keep it in the
                                 container, implies '--keep'
    -verbose                  -v, enable verbose output for the plugin
+   -app-instance-index       -i [index], select to which instance of the app to connect
 
 </pre>
 

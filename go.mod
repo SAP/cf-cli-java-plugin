@@ -1,12 +1,13 @@
-module cf-cli-java-plugin
+module cf.plugin.ref/requires
 
 go 1.24.3
 
-toolchain go1.24.5
+toolchain go1.24.4
 
 require (
 	code.cloudfoundry.org/cli v0.0.0-20250623142502-fb19e7a825ee
 	github.com/lithammer/fuzzysearch v1.1.8
+	github.com/simonleung8/flags v0.0.0-20170704170018-8020ed7bcf1a
 )
 
 require (

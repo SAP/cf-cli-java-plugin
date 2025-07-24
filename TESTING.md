@@ -2,7 +2,8 @@
 
 ## 🎯 Overview
 
-The CF Java Plugin now includes comprehensive CI/CD integration with automated testing, linting, and quality assurance for both Go and Python codebases.
+The CF Java Plugin now includes comprehensive CI/CD integration with automated testing, linting,
+and quality assurance for both Go and Python codebases.
 
 ## 🏗️ CI/CD Pipeline
 
@@ -27,6 +28,7 @@ The CF Java Plugin now includes comprehensive CI/CD integration with automated t
 ### Smart Python Detection
 
 The CI automatically detects if the Python test suite exists by checking for:
+
 - `test/requirements.txt`
 - `test/setup.sh`
 
@@ -35,11 +37,13 @@ If found, runs Python linting validation. **Note: Python test execution is tempo
 ## 🔒 Pre-commit Hooks
 
 ### Installation
+
 ```bash
 ./setup-dev-env.sh  # One-time setup
 ```
 
 ### What It Checks
+
 - ✅ Go code formatting (`go fmt`)
 - ✅ Go static analysis (`go vet`)
 - ✅ Python linting (flake8) - if test suite exists
@@ -49,6 +53,7 @@ If found, runs Python linting validation. **Note: Python test execution is tempo
 - ✅ Markdown linting (markdownlint) - checks git-tracked files
 
 ### Hook Behavior
+
 - **Auto-fixes**: Python formatting and import sorting
 - **Blocks commits**: On critical linting issues
 - **Warnings**: For non-critical issues or missing Python suite
@@ -56,12 +61,15 @@ If found, runs Python linting validation. **Note: Python test execution is tempo
 ## 🧪 Python Test Suite Integration
 
 ### Linting Standards
+
 - **[flake8](https://flake8.pycqa.org/)**: Line length 120, ignores E203,W503
 - **[black](https://black.readthedocs.io/)**: Line length 120, compatible with flake8
 - **[isort](https://pycqa.github.io/isort/)**: Black-compatible profile for import sorting
-- **[markdownlint](https://github.com/DavidAnson/markdownlint)**: Automated markdown formatting (120 char limit, git-tracked files only)
+- **[markdownlint](https://github.com/DavidAnson/markdownlint)**: Automated markdown formatting
+  (120 char limit, git-tracked files only)
 
 ### Manual Usage
+
 ```bash
 ./scripts/lint-go.sh check         # Check Go code formatting and static analysis
 ./scripts/lint-go.sh fix           # Auto-fix Go code issues
@@ -73,6 +81,7 @@ If found, runs Python linting validation. **Note: Python test execution is tempo
 ```
 
 ### Test Execution
+
 ```bash
 cd test
 ./setup.sh               # Setup environment
@@ -82,6 +91,7 @@ cd test
 **CI Status**: Python tests are currently disabled in CI workflows but can be run locally.
 
 ### Coverage Reporting
+
 - Generated in XML format for Codecov integration
 - Covers the `framework` module
 - Includes terminal output for local development
@@ -89,6 +99,7 @@ cd test
 ## 🛠️ Development Workflow
 
 ### First-time Setup
+
 ```bash
 git clone <repository>
 cd cf-cli-java-plugin
@@ -96,6 +107,7 @@ cd cf-cli-java-plugin
 ```
 
 ### Daily Development
+
 ```bash
 # Make changes
 code cf-java-plugin.code-workspace
@@ -111,6 +123,7 @@ git push origin feature-branch
 ```
 
 ### Manual Testing
+
 ```bash
 # Test pre-commit hooks
 .git/hooks/pre-commit
@@ -125,15 +138,18 @@ cd test && pytest test_jfr.py -v
 ## 📊 Quality Metrics
 
 ### Go Code Quality
+
 - Formatting enforcement via `go fmt`
 - Static analysis via `go vet`
 
 ### Python Code Quality
+
 - Style compliance: flake8 (PEP 8 + custom rules)
 - Formatting: black (consistent style)
 - Import organization: isort (proper import ordering)
 
 ### Markdown Code Quality
+
 - Style compliance: markdownlint (120 char limit, git-tracked files only)
 - Automated formatting with relaxed rules for compatibility
 
@@ -168,6 +184,7 @@ For running Python tests in CI that require Cloud Foundry credentials, configure
 ### Environment Variable Usage
 
 The Python test framework automatically uses these environment variables:
+
 - Falls back to `test_config.yml` if environment variables are not set
 - Supports both file-based and environment-based configuration
 - CI workflows pass secrets as environment variables to test processes
