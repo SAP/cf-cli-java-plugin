@@ -28,6 +28,7 @@ counterfeiter
 
 # Built binaries
 build/
+pkg/
 
 # built project binary (go build)
 cf-java-plugin
@@ -50,3 +51,6 @@ test/snapshots/
 
 # Build artifacts
 dist
+
+# go
+pkg

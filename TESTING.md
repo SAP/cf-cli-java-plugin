@@ -20,6 +20,7 @@ The CF Java Plugin now includes comprehensive CI/CD integration with automated t
    - **Validation Steps**:
      - Go formatting (`go fmt`) and linting (`go vet`)
      - Python code quality (flake8, black, isort)
+     - Markdown linting and formatting
      - Python test execution
      - Plugin build verification
 
@@ -45,6 +46,7 @@ If found, runs Python linting validation. **Note: Python test execution is tempo
 - ✅ Python formatting (black) - auto-fixes issues
 - ✅ Import sorting (isort) - auto-fixes issues
 - ✅ Python syntax validation
+- ✅ Markdown linting (markdownlint) - checks git-tracked files
 
 ### Hook Behavior
 - **Auto-fixes**: Python formatting and import sorting
@@ -54,9 +56,21 @@ If found, runs Python linting validation. **Note: Python test execution is tempo
 ## 🧪 Python Test Suite Integration
 
 ### Linting Standards
-- **flake8**: Line length 120, ignores E203,W503
-- **black**: Line length 120, compatible with flake8
-- **isort**: Black-compatible profile for import sorting
+- **[flake8](https://flake8.pycqa.org/)**: Line length 120, ignores E203,W503
+- **[black](https://black.readthedocs.io/)**: Line length 120, compatible with flake8
+- **[isort](https://pycqa.github.io/isort/)**: Black-compatible profile for import sorting
+- **[markdownlint](https://github.com/DavidAnson/markdownlint)**: Automated markdown formatting (120 char limit, git-tracked files only)
+
+### Manual Usage
+```bash
+./scripts/lint-go.sh check         # Check Go code formatting and static analysis
+./scripts/lint-go.sh fix           # Auto-fix Go code issues
+./scripts/lint-python.sh check     # Check Python code quality
+./scripts/lint-python.sh fix       # Auto-fix Python code issues
+./scripts/lint-markdown.sh check    # Check formatting
+./scripts/lint-markdown.sh fix      # Auto-fix issues
+./scripts/lint-all.sh check         # Check all (Go, Python, Markdown)
+```
 
 ### Test Execution
 ```bash
@@ -118,6 +132,10 @@ cd test && pytest test_jfr.py -v
 - Style compliance: flake8 (PEP 8 + custom rules)
 - Formatting: black (consistent style)
 - Import organization: isort (proper import ordering)
+
+### Markdown Code Quality
+- Style compliance: markdownlint (120 char limit, git-tracked files only)
+- Automated formatting with relaxed rules for compatibility
 
 ## 🔐 GitHub Secrets Configuration
 

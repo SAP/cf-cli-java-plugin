@@ -40,6 +40,43 @@ echo "📦 Installing Go dependencies..."
 go mod tidy
 echo "✅ Go dependencies installed"
 
+# Install linting tools
+echo "🔍 Installing linting tools..."
+
+# Install golangci-lint
+if ! command -v golangci-lint &> /dev/null; then
+    echo "Installing golangci-lint..."
+    go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+    echo "✅ golangci-lint installed"
+else
+    echo "✅ golangci-lint already installed"
+fi
+
+# Install gofumpt for stricter formatting
+if ! command -v gofumpt &> /dev/null; then
+    echo "Installing gofumpt..."
+    go install mvdan.cc/gofumpt@latest
+    echo "✅ gofumpt installed"
+else
+    echo "✅ gofumpt already installed"
+fi
+
+# Install markdownlint (if npm is available)
+if command -v npm &> /dev/null; then
+    if ! command -v markdownlint &> /dev/null; then
+        echo "Installing markdownlint-cli..."
+        npm install -g markdownlint-cli
+        echo "✅ markdownlint-cli installed"
+    else
+        echo "✅ markdownlint-cli already installed"
+    fi
+else
+    echo "⚠️  npm not found - skipping markdownlint installation"
+    echo "   Install Node.js and npm to enable markdown linting"
+fi
+
+echo "✅ Linting tools setup complete"
+
 # Setup Python environment (if test suite exists)
 if [ -f "test/requirements.txt" ]; then
     echo "🐍 Setting up Python test environment..."
@@ -89,6 +126,7 @@ echo ""
 echo "📋 What's configured:"
 echo "  ✅ Pre-commit hooks (run on every git commit)"
 echo "  ✅ Go development environment"
+echo "  ✅ Linting tools (golangci-lint, markdownlint)"
 if [ -f "test/requirements.txt" ]; then
     echo "  ✅ Python test suite environment"
 else

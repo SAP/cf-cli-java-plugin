@@ -35,7 +35,6 @@ The following error might occur when connected to the SAP internal network:
 
 Just connect directly to the internet without the VPN.
 
-
 ## State of Testing
 
 - `heap-dump` is thoroughly tested, including all flags, so that less has to be tested for the other commands.
@@ -75,7 +74,7 @@ Example output:
 - **`test_asprof.py`** - Async-profiler tests (SapMachine only)
 - **`test_cf_java_plugin.py`** - Integration and workflow tests
 - **`test_disk_full.py`** - Tests for disk full scenarios (e.g., heap dump with no space left)
-- ** `test_jre21.py`** - JRE21/non-SapMachine21-specific tests (e.g., heap dump, thread dump, etc.)
+- **`test_jre21.py`** - JRE21/non-SapMachine21-specific tests (e.g., heap dump, thread dump, etc.)
 
 ## Test Selection & Execution
 
@@ -176,7 +175,6 @@ class TestExample(TestBase):
             .should_succeed() \
             .should_create_file(f"{app}-heapdump-*.hprof")
 ```
-
 
 ## Tips
 

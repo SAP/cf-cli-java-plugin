@@ -1,0 +1,83 @@
+# golangci-lint configuration file
+# Run with: golangci-lint run
+
+version: "2"
+
+run:
+  timeout: 5m
+
+linters-settings:
+  
+  # Cyclomatic complexity
+  cyclop:
+    max-complexity: 10
+  
+  # Function length
+  funlen:
+    lines: 60
+    statements: 40
+
+linters:
+  enable:
+    # Core linters (enabled by default but explicitly listed)
+    - errcheck          # Check for unchecked errors
+    - govet            # Report suspicious constructs
+    - ineffassign      # Detect ineffectual assignment
+    - staticcheck      # Comprehensive static analysis
+    - unused           # Find unused code
+    
+    # Architecture and interface linters (key for your request)
+    - interfacebloat   # Detect interfaces with too many methods
+    - ireturn          # Accept interfaces, return concrete types
+    - unparam          # Report unused function parameters
+    
+    # Code quality linters
+    - asciicheck       # Check for non-ASCII identifiers
+    - bidichk          # Check for dangerous unicode sequences
+    - bodyclose        # Check HTTP response body is closed
+    - contextcheck     # Check context usage
+    - cyclop           # Check cyclomatic complexity
+    - dupl             # Check for code duplication
+    - durationcheck    # Check duration multiplication
+    - errname          # Check error naming conventions
+    - errorlint        # Check error wrapping
+    - exhaustive       # Check enum switch exhaustiveness
+    - funlen           # Check function length
+    - gocognit         # Check cognitive complexity
+    - goconst          # Find repeated strings that could be constants
+    - gocritic         # Comprehensive Go source code linter
+    - gocyclo          # Check cyclomatic complexity
+    - godox            # Find TODO, FIXME, etc. comments
+    - goprintffuncname # Check printf-style function names
+    - gosec            # Security-focused linter
+    - misspell         # Check for misspellings
+    - nakedret         # Check naked returns
+    - nestif           # Check deeply nested if statements
+    - nilerr           # Check nil error returns
+    - nolintlint       # Check nolint directives
+    - predeclared      # Check for shadowed predeclared identifiers
+    - revive           # Fast, configurable, extensible linter
+    - rowserrcheck     # Check SQL rows.Err
+    - sqlclosecheck    # Check SQL Close calls
+    - unconvert        # Check unnecessary type conversions
+    - wastedassign     # Check wasted assignments
+    - whitespace       # Check for extra whitespace
+    
+  disable:
+    # Disabled as requested
+    - gochecknoglobals  # Ignore global variables (as requested)
+    
+    # Disabled for being too strict or problematic
+    - testpackage      # Too strict - requires separate test packages
+    - paralleltest     # Not always applicable
+    - exhaustruct      # Too strict - requires all struct fields
+    - varnamelen       # Variable name length can be subjective
+    - wrapcheck        # Error wrapping can be excessive
+    - nlreturn         # Newline return rules too strict
+    - wsl             # Whitespace linter too opinionated
+    - gosmopolitan    # Locale-specific, not needed
+    - nonamedreturns  # Named returns can be useful
+    - tagliatelle     # Struct tag formatting can be subjective
+    - maintidx        # Maintainability index can be subjective
+    - godot           # Check comments end with period
+    - lll              # Check line length

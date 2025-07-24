@@ -69,6 +69,15 @@ else
     print_warning "Python test suite not found - skipping Python linting"
 fi
 
+# Run Markdown linting
+print_header "Markdown Code Quality"
+if "$SCRIPT_DIR/lint-markdown.sh" "$MODE"; then
+    print_status "Markdown linting passed"
+else
+    print_error "Markdown linting failed"
+    OVERALL_SUCCESS=false
+fi
+
 # Final summary
 print_header "Summary"
 if [ "$OVERALL_SUCCESS" = true ]; then

@@ -103,8 +103,9 @@
     // Go language support for main project
     "go.gopath": "${workspaceFolder}",
     "go.goroot": "",
-    "go.formatTool": "goimports",
-    "go.lintTool": "golint",
+    "go.formatTool": "gofumpt",
+    "go.lintTool": "golangci-lint",
+    "go.lintOnSave": "package",
     // YAML schema validation
     "yaml.schemas": {
         "./test/test_config.yml.example": [

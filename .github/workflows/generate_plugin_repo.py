@@ -49,7 +49,7 @@ def generate_plugin_repo_yaml():
             binary_info = {
                 "checksum": checksum,
                 "platform": platform,
-                "url": f"{repo_url}/releases/download/v{version}/{filename}"
+                "url": f"{repo_url}/releases/download/{version}/{filename}"
             }
             binaries.append(binary_info)
             print(f"Added {platform}: {filename} (checksum: {checksum})")

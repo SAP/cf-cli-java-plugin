@@ -65,3 +65,6 @@ coverage.xml
 
 # pytest
 test_report.html
+
+# go
+pkg

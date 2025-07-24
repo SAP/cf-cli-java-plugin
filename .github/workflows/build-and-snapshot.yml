@@ -59,12 +59,11 @@ jobs:
       - name: Install dependencies
         run: go mod tidy -e || true
 
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
       - name: Lint Go files
-        run: |
-          echo "🔍 Running go fmt..."
-          go fmt .
-          echo "🔍 Running go vet..."
-          go vet .
+        run: ./scripts/lint-go.sh ci
 
       - name: Build binary
         run: |
