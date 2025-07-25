@@ -7,7 +7,7 @@
 This plugin for the [Cloud Foundry Command Line](https://github.com/cloudfoundry/cli) provides convenience utilities to
 work with Java applications deployed on Cloud Foundry.
 
-Currently, it allows to:
+Currently, it allows you to:
 
 - Trigger and retrieve a heap dump and a thread dump from an instance of a Cloud Foundry Java application
 - To run jcmd remotely on your application
@@ -44,7 +44,7 @@ Trigger installation of the plugin via
 cf install-plugin java
 ```
 
-The releases in the community repository are older that the actual releases on GitHub, that you can install manually, so
+The releases in the community repository are older than the actual releases on GitHub, that you can install manually, so
 we recommend the manual installation.
 
 ### Manual Installation of Snapshot Release
@@ -97,16 +97,16 @@ applications:
     buildpack: https://github.com/cloudfoundry/java-buildpack
     env:
       JBP_CONFIG_OPEN_JDK_JRE:
-        '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/bionic/x86_64", version: 11.+ }
+        '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/jammy/x86_64", version: 11.+ }
         }'
       JBP_CONFIG_JAVA_OPTS: "[java_opts: '-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints']"
 ```
 
-`-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints` is used to improve profiling accurary and has no known negative
+`-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints` is used to improve profiling accuracy and has no known negative
 performance impacts.
 
 Please note that this requires the use of an online buildpack (configured in the `buildpack` property). When system
-buildpacks are used, staging will fail with cache issues, because the system buildpacks don’t have the JDK chached.
+buildpacks are used, staging will fail with cache issues, because the system buildpacks don’t have the JDK cached.
 Please also note that this is not to be considered a recommendation to use a full JDK. It's just one option to get the
 tools required for the use of this plugin when you need it, e.g., for troubleshooting. The `version` property is
 optional and can be used to request a specific Java version.
@@ -150,7 +150,7 @@ Creating a CPU-time profile via async-profiler:
 > cf java asprof-start-cpu $APP_NAME
 Profiling started
 # wait some time to gather data
-> cf java asprof-stop-cpu $APP_NAME
+> cf java asprof-stop $APP_NAME
 -> ./$APP_NAME-asprof-$RANDOM.jfr
 ```
 
@@ -222,19 +222,19 @@ USAGE:
 
      jfr-start
         Start a Java Flight Recorder default recording on a running Java
-        application (stores in the the container-dir)
+        application (stores in the container-dir)
 
      jfr-start-profile
         Start a Java Flight Recorder profile recording on a running Java
-        application (stores in the the container-dir))
+        application (stores in the container-dir))
 
      jfr-start-gc (recent SapMachine only)
         Start a Java Flight Recorder GC recording on a running Java application
-        (stores in the the container-dir)
+        (stores in the container-dir)
 
      jfr-start-gc-details (recent SapMachine only)
         Start a Java Flight Recorder detailed GC recording on a running Java
-        application (stores in the the container-dir)
+        application (stores in the container-dir)
 
      jfr-stop
         Stop a Java Flight Recorder recording on a running Java application
@@ -288,23 +288,23 @@ USAGE:
         Get the status of async-profiler on a running Java application
 
 OPTIONS:
-   -args                     -a, Miscellaneous arguments to pass to the command (if supported) in the
-                               container, be aware to end it with a space if it is a simple option. For
-                               commands that create arbitrary files (jcmd, asprof), the environment
-                               variables @FSPATH, @ARGS, @APP_NAME, @FILE_NAME, and @STATIC_FILE_NAME are
-                               available in --args to reference the working directory path, arguments,
-                               application name, and generated file name respectively.
    -container-dir            -cd, the directory path in the container that the heap dump/JFR/... file will be
                                 saved to
    -dry-run                  -n, just output to command line what would be executed
    -keep                     -k, keep the heap dump in the container; by default the heap dump/JFR/... will
-                               be deleted from the container's filesystem after been downloaded
+                               be deleted from the container's filesystem after being downloaded
    -local-dir                -ld, the local directory path that the dump/JFR/... file will be saved to,
                                 defaults to the current directory
    -no-download              -nd, don't download the heap dump/JFR/... file to local, only keep it in the
                                 container, implies '--keep'
    -verbose                  -v, enable verbose output for the plugin
    -app-instance-index       -i [index], select to which instance of the app to connect
+   -args                     -a, Miscellaneous arguments to pass to the command (if supported) in the
+                               container, be aware to end it with a space if it is a simple option. For
+                               commands that create arbitrary files (jcmd, asprof), the environment
+                               variables @FSPATH, @ARGS, @APP_NAME, @FILE_NAME, and @STATIC_FILE_NAME are
+                               available in --args to reference the working directory path, arguments,
+                               application name, and generated file name respectively.
 
 </pre>
 

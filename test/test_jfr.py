@@ -53,9 +53,9 @@ class TestJFRBasic(TestBase):
         t.run(f"jfr-status {app}").should_succeed().should_contain("Recording ").no_files()
 
         # Clean up
-        t.run(f"jfr-stop {app} --no-download").should_succeed().should_create_file(
+        t.run(f"jfr-stop {app} --no-download").should_succeed().should_create_remote_file(
             "*.jfr"
-        ).should_create_no_remote_files()
+        ).should_create_no_files()
 
     @test()
     def test_concurrent_recordings_prevention(self, t, app):

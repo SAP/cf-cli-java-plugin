@@ -15,7 +15,7 @@ import (
 	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
-// Version represents a semantic version with major, minor, and build numbers
+// Version represents a semantic version with major, minor, and build numbers.
 type Version struct {
 	Major int
 	Minor int
@@ -74,7 +74,7 @@ type CFAppEnv struct {
 	} `json:"application_env_json"`
 }
 
-// GenerateUUID generates a new RFC 4122 Version 4 UUID using Go's built-in crypto/rand
+// GenerateUUID generates a new RFC 4122 Version 4 UUID using Go's built-in crypto/rand.
 func GenerateUUID() string {
 	// Generate 16 random bytes
 	bytes := make([]byte, 16)
@@ -124,7 +124,7 @@ func FindReasonForAccessError(app string) string {
 	if err != nil {
 		return "cf is not logged in, please login and try again"
 	}
-	// find all app names
+	// Find all app names
 	lines := strings.Split(string(out[:]), "\n")
 	appNames := []string{}
 	foundHeader := false
@@ -211,12 +211,12 @@ func CopyOverCat(args []string, src string, dest string) error {
 
 	err = cat.Start()
 	if err != nil {
-		return errors.New("error occured during copying dump file: " + src + ", please try again.")
+		return errors.New("error occurred during copying dump file: " + src + ", please try again.")
 	}
 
 	err = cat.Wait()
 	if err != nil {
-		return errors.New("error occured while waiting for the copying complete")
+		return errors.New("error occurred while waiting for the copying complete")
 	}
 
 	return nil
@@ -226,7 +226,7 @@ func DeleteRemoteFile(args []string, path string) error {
 	args = append(args, "rm -fr "+path)
 	_, err := exec.Command("cf", args...).Output()
 	if err != nil {
-		return errors.New("error occured while removing dump file generated")
+		return errors.New("error occurred while removing dump file generated")
 	}
 
 	return nil
@@ -264,10 +264,10 @@ func ListFiles(args []string, path string) ([]string, error) {
 	args = append(args, cmd)
 	output, err := exec.Command("cf", args...).Output()
 	if err != nil {
-		return nil, errors.New("error occured while listing files: " + string(output[:]))
+		return nil, errors.New("error occurred while listing files: " + string(output[:]))
 	}
 	files := strings.Split(strings.Trim(string(output[:]), "\n"), "\n")
-	// filter all empty strings
+	// Filter all empty strings
 	j := 0
 	for _, s := range files {
 		if s != "" {
@@ -310,7 +310,7 @@ func FuzzySearch(needle string, words []string, max int) []string {
 	return results
 }
 
-// JoinWithOr joins strings with commas and "or" for the last element: "x, y, or z"
+// JoinWithOr joins strings with commas and "or" for the last element: "x, y, or z".
 func JoinWithOr(a []string) string {
 	if len(a) == 0 {
 		return ""
@@ -322,7 +322,7 @@ func JoinWithOr(a []string) string {
 }
 
 // WrapTextWithPrefix wraps text to fit within maxWidth characters per line,
-// with the first line using the given prefix and subsequent lines indented to match the prefix length
+// with the first line using the given prefix and subsequent lines indented to match the prefix length.
 func WrapTextWithPrefix(text, prefix string, maxWidth int, miscLineIndent int) string {
 	maxDescLength := maxWidth - len(prefix)
 
@@ -330,7 +330,7 @@ func WrapTextWithPrefix(text, prefix string, maxWidth int, miscLineIndent int) s
 		return prefix + text
 	}
 
-	// Split text into multiple lines if too long
+	// Split text into multiple lines if too long.
 	words := strings.Fields(text)
 	var lines []string
 	var currentLine string
@@ -355,7 +355,7 @@ func WrapTextWithPrefix(text, prefix string, maxWidth int, miscLineIndent int) s
 		lines = append(lines, currentLine)
 	}
 
-	// Join lines with proper indentation
+	// Join lines with proper indentation.
 	if len(lines) > 0 {
 		result := prefix + lines[0]
 		indent := strings.Repeat(" ", len(prefix))
@@ -365,15 +365,19 @@ func WrapTextWithPrefix(text, prefix string, maxWidth int, miscLineIndent int) s
 		return result
 	}
 
-	// Fallback if no lines were created
+	// Fallback if no lines were created.
 	return prefix + text
 }
 
-// ToSentenceCase converts the first character to uppercase and the rest to lowercase
+// ToSentenceCase returns the input string with the first character uppercased and the rest lowercased.
+// Handles Unicode and empty strings safely.
 func ToSentenceCase(input string) string {
-	if len(input) == 0 {
+	if input == "" {
 		return input
 	}
-	// Convert the first letter to uppercase
-	return strings.ToUpper(string(input[0])) + strings.ToLower(input[1:])
+	runes := []rune(input)
+	if len(runes) == 1 {
+		return strings.ToUpper(string(runes[0]))
+	}
+	return strings.ToUpper(string(runes[0])) + strings.ToLower(string(runes[1:]))
 }

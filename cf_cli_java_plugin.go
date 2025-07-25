@@ -27,12 +27,19 @@ import (
 // Assert that JavaPlugin implements plugin.Plugin.
 var _ plugin.Plugin = (*JavaPlugin)(nil)
 
-// The JavaPlugin is a cf cli plugin that supports taking heap and thread dumps on demand
+// JavaPlugin is a CF CLI plugin that supports taking heap and thread dumps on demand
 type JavaPlugin struct {
 	verbose bool
 }
 
-// InvalidUsageError errors mean that the arguments passed in input to the command are invalid
+// logVerbose logs a message with a format string if verbose mode is enabled
+func (c *JavaPlugin) logVerbose(format string, args ...any) {
+	if c.verbose {
+		fmt.Printf("[VERBOSE] "+format+"\n", args...)
+	}
+}
+
+// InvalidUsageError indicates that the arguments passed as input to the command are invalid
 type InvalidUsageError struct {
 	message string
 }
@@ -41,7 +48,7 @@ func (e InvalidUsageError) Error() string {
 	return e.message
 }
 
-// Options holds all command line options for the Java plugin
+// Options holds all command-line options for the Java plugin
 type Options struct {
 	AppInstanceIndex int
 	Keep             bool
@@ -53,7 +60,7 @@ type Options struct {
 	Args             string
 }
 
-// FlagDefinition holds metadata for a command line flag
+// FlagDefinition holds metadata for a command-line flag
 type FlagDefinition struct {
 	Name        string
 	ShortName   string
@@ -77,7 +84,7 @@ var flagDefinitions = []FlagDefinition{
 		Name:        "keep",
 		ShortName:   "k",
 		Usage:       "whether to `keep` the heap-dump/JFR/... files on the container of the application instance after having downloaded it locally",
-		Description: "keep the heap dump in the container; by default the heap dump/JFR/... will be deleted from the container's filesystem after been downloaded",
+		Description: "keep the heap dump in the container; by default the heap dump/JFR/... will be deleted from the container's filesystem after being downloaded",
 		Type:        "bool",
 	},
 	{
@@ -111,7 +118,7 @@ var flagDefinitions = []FlagDefinition{
 	{
 		Name:        "local-dir",
 		ShortName:   "ld",
-		Usage:       "specify the folder where the dump/JFR/... file will be downloaded to, dump file wil not be copied to local if this parameter was not set",
+		Usage:       "specify the folder where the dump/JFR/... file will be downloaded to, dump file will not be copied to local if this parameter was not set",
 		Description: "the local directory path that the dump/JFR/... file will be saved to, defaults to the current directory",
 		Type:        "string",
 	},
@@ -124,7 +131,7 @@ var flagDefinitions = []FlagDefinition{
 	},
 }
 
-func CreateOptionsParser() flags.FlagContext {
+func (c *JavaPlugin) createOptionsParser() flags.FlagContext {
 	commandFlags := flags.New()
 
 	// Create flags from centralized definitions
@@ -142,9 +149,9 @@ func CreateOptionsParser() flags.FlagContext {
 	return commandFlags
 }
 
-// ParseOptions creates and parses command line flags, returning the Options struct
-func ParseOptions(args []string) (*Options, []string, error) {
-	commandFlags := CreateOptionsParser()
+// parseOptions creates and parses command-line flags, returning the Options struct
+func (c *JavaPlugin) parseOptions(args []string) (*Options, []string, error) {
+	commandFlags := c.createOptionsParser()
 	parseErr := commandFlags.Parse(args...)
 	if parseErr != nil {
 		return nil, nil, parseErr
@@ -161,32 +168,11 @@ func ParseOptions(args []string) (*Options, []string, error) {
 		Args:             commandFlags.String("args"),
 	}
 
-	// Debug output only when verbose is enabled
-	if options.Verbose {
-		fmt.Printf("[DEBUG] Parsed options:\n"+
-			"  App Instance Index: %d\n"+
-			"  Keep: %t\n"+
-			"  No Download: %t\n"+
-			"  Dry Run: %t\n"+
-			"  Verbose: %t\n"+
-			"  Container Dir: %s\n"+
-			"  Local Dir: %s\n"+
-			"  Args: %s\n",
-			options.AppInstanceIndex,
-			options.Keep,
-			options.NoDownload,
-			options.DryRun,
-			options.Verbose,
-			options.ContainerDir,
-			options.LocalDir,
-			options.Args)
-	}
-
 	return options, commandFlags.Args(), nil
 }
 
 // generateOptionsMapFromFlags creates the options map for plugin metadata
-func generateOptionsMapFromFlags() map[string]string {
+func (c *JavaPlugin) generateOptionsMapFromFlags() map[string]string {
 	options := make(map[string]string)
 
 	// Generate options from the centralized flag definitions
@@ -206,14 +192,14 @@ func generateOptionsMapFromFlags() map[string]string {
 }
 
 const (
-	// JavaDetectionCommand is the prologue command to detect on the Garden container if it contains a Java app.
+	// JavaDetectionCommand is the prologue command to detect if the Garden container contains a Java app.
 	JavaDetectionCommand              = "if ! pgrep -x \"java\" > /dev/null; then echo \"No 'java' process found running. Are you sure this is a Java app?\" >&2; exit 1; fi"
 	CheckNoCurrentJFRRecordingCommand = `OUTPUT=$($JCMD_COMMAND $(pidof java) JFR.check 2>&1); if [[ ! "$OUTPUT" == *"No available recording"* ]]; then echo "JFR recording already running. Stop it before starting a new recording."; exit 1; fi;`
 	FilterJCMDRemoteMessage           = `filter_jcmd_remote_message() {
   if command -v grep >/dev/null 2>&1; then
-    grep -v -e "Connected to remote JVM" -e "JVM response code = 0"
+	grep -v -e "Connected to remote JVM" -e "JVM response code = 0"
   else
-    cat  # fallback: just pass through the input unchanged
+	cat  # fallback: just pass through the input unchanged
   fi
 };`
 )
@@ -221,14 +207,14 @@ const (
 // Run must be implemented by any plugin because it is part of the
 // plugin interface defined by the core CLI.
 //
-// Run(....) is the entry point when the core CLI is invoking a command defined
+// Run(...) is the entry point when the core CLI is invoking a command defined
 // by a plugin. The first parameter, plugin.CliConnection, is a struct that can
-// be used to invoke cli commands. The second parameter, args, is a slice of
-// strings. args[0] will be the Name of the command, and will be followed by
-// any additional arguments a cli user typed in.
+// be used to invoke CLI commands. The second parameter, args, is a slice of
+// strings. args[0] will be the name of the command, and will be followed by
+// any additional arguments a CLI user typed in.
 //
-// Any error handling should be handled with the plugin itself (this means printing
-// user facing errors). The CLI will exit 0 if the plugin exits 0 and will exit
+// Any error handling should be handled within the plugin itself (this means printing
+// user-facing errors). The CLI will exit 0 if the plugin exits 0 and will exit
 // 1 should the plugin exit nonzero.
 func (c *JavaPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 	// Check if verbose flag is in args for early logging
@@ -239,30 +225,22 @@ func (c *JavaPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 		}
 	}
 
-	if c.verbose {
-		fmt.Printf("[VERBOSE] Run called with args: %v\n", args)
-	}
+	c.logVerbose("Run called with args: %v", args)
 
 	_, err := c.DoRun(cliConnection, args)
 	if err != nil {
-		if c.verbose {
-			fmt.Printf("[VERBOSE] Error occurred: %v\n", err)
-		}
+		c.logVerbose("Error occurred: %v", err)
 		os.Exit(1)
 	}
-	if c.verbose {
-		fmt.Printf("[VERBOSE] Run completed successfully\n")
-	}
+	c.logVerbose("Run completed successfully")
 }
 
-// DoRun is an internal method that we use to wrap the cmd package with CommandExecutor for test purposes
+// DoRun is an internal method used to wrap the cmd package with CommandExecutor for test purposes
 func (c *JavaPlugin) DoRun(cliConnection plugin.CliConnection, args []string) (string, error) {
 	traceLogger := trace.NewLogger(os.Stdout, true, os.Getenv("CF_TRACE"), "")
 	ui := terminal.NewUI(os.Stdin, os.Stdout, terminal.NewTeePrinter(os.Stdout), traceLogger)
 
-	if c.verbose {
-		fmt.Printf("[VERBOSE] DoRun called with args: %v\n", args)
-	}
+	c.logVerbose("DoRun called with args: %v", args)
 
 	output, err := c.execute(cliConnection, args)
 	if err != nil {
@@ -309,14 +287,14 @@ type Command struct {
 	GenerateArbitraryFilesFolderName string
 }
 
-// function names "HasMiscArgs" that is used on Command and checks whether the SSHCommand contains @ARGS
+// HasMiscArgs checks whether the SSHCommand contains @ARGS
 func (c *Command) HasMiscArgs() bool {
 	return strings.Contains(c.SSHCommand, "@ARGS")
 }
 
-// replaceVariables replaces @-prefixed variables in the command with actual values
-// Returns the processed command string and an error if validation fails
-func replaceVariables(command, appName, fspath, fileName, staticFileName, args string) (string, error) {
+// replaceVariables replaces @-prefixed variables in the command with actual values.
+// Returns the processed command string and an error if validation fails.
+func (c *JavaPlugin) replaceVariables(command, appName, fspath, fileName, staticFileName, args string) (string, error) {
 	// Validate: @ARGS cannot contain itself, other variables cannot contain any @ variables
 	if strings.Contains(args, "@ARGS") {
 		return "", fmt.Errorf("invalid variable reference: @ARGS cannot contain itself")
@@ -375,7 +353,7 @@ if [ -z "${JMAP_COMMAND}" ] && [ -z "${JVMMON_COMMAND}" ]; then
 		  path: <PATH_TO_BUILD_ARTIFACT>
 		  buildpack: https://github.com/cloudfoundry/java-buildpack
 		  env:
-			JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/bionic/x86_64", version: 11.+ } }'
+			JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/jammy/x86_64", version: 21.+ } }'
 		
 	"
   exit 1
@@ -411,7 +389,7 @@ fi`,
 				path: <PATH_TO_BUILD_ARTIFACT>
 				buildpack: https://github.com/cloudfoundry/java-buildpack
 				env:
-					JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/bionic/x86_64", version: 11.+ } }'
+					JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/jammy/x86_64", version: 21.+ } }'
 				
 			"
 		exit 1
@@ -437,7 +415,7 @@ fi`,
 	},
 	{
 		Name:          "jfr-start",
-		Description:   "Start a Java Flight Recorder default recording on a running Java application (stores in the the container-dir)",
+		Description:   "Start a Java Flight Recorder default recording on a running Java application (stores in the container-dir)",
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
 		NeedsFileName: true,
@@ -450,7 +428,7 @@ fi`,
 	},
 	{
 		Name:          "jfr-start-profile",
-		Description:   "Start a Java Flight Recorder profile recording on a running Java application (stores in the the container-dir))",
+		Description:   "Start a Java Flight Recorder profile recording on a running Java application (stores in the container-dir))",
 		RequiredTools: []string{"jcmd"},
 		GenerateFiles: false,
 		NeedsFileName: true,
@@ -463,7 +441,7 @@ fi`,
 	},
 	{
 		Name:                   "jfr-start-gc",
-		Description:            "Start a Java Flight Recorder GC recording on a running Java application (stores in the the container-dir)",
+		Description:            "Start a Java Flight Recorder GC recording on a running Java application (stores in the container-dir)",
 		RequiredTools:          []string{"jcmd"},
 		GenerateFiles:          false,
 		OnlyOnRecentSapMachine: true,
@@ -477,7 +455,7 @@ fi`,
 	},
 	{
 		Name:                   "jfr-start-gc-details",
-		Description:            "Start a Java Flight Recorder detailed GC recording on a running Java application (stores in the the container-dir)",
+		Description:            "Start a Java Flight Recorder detailed GC recording on a running Java application (stores in the container-dir)",
 		RequiredTools:          []string{"jcmd"},
 		GenerateFiles:          false,
 		OnlyOnRecentSapMachine: true,
@@ -637,29 +615,22 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 		return "", errors.New("the environment variable CF_TRACE is set to true. This prevents download of the dump from succeeding")
 	}
 
-	options, arguments, parseErr := ParseOptions(args[1:])
+	options, arguments, parseErr := c.parseOptions(args[1:])
 	if parseErr != nil {
 		return "", &InvalidUsageError{message: fmt.Sprintf("Error while parsing command arguments: %v", parseErr)}
 	}
 
 	fileFlags := []string{"container-dir", "local-dir", "keep", "no-download"}
 
-	// Helper function for verbose logging with format strings
-	logVerbose := func(format string, args ...any) {
-		if options.Verbose {
-			fmt.Printf("[VERBOSE] "+format+"\n", args...)
-		}
-	}
-
-	logVerbose("Starting command execution")
-	logVerbose("Command arguments: %v", args)
+	c.logVerbose("Starting command execution")
+	c.logVerbose("Command arguments: %v", args)
 
 	noDownload := options.NoDownload
 	keepAfterDownload := options.Keep || noDownload
 
-	logVerbose("Application instance: %d", options.AppInstanceIndex)
-	logVerbose("No download: %t", noDownload)
-	logVerbose("Keep after download: %t", keepAfterDownload)
+	c.logVerbose("Application instance: %d", options.AppInstanceIndex)
+	c.logVerbose("No download: %t", noDownload)
+	c.logVerbose("Keep after download: %t", keepAfterDownload)
 
 	remoteDir := options.ContainerDir
 	// strip trailing slashes from remoteDir
@@ -669,8 +640,8 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 		localDir = "."
 	}
 
-	logVerbose("Remote directory: %s", remoteDir)
-	logVerbose("Local directory: %s", localDir)
+	c.logVerbose("Remote directory: %s", remoteDir)
+	c.logVerbose("Local directory: %s", localDir)
 
 	argumentLen := len(arguments)
 
@@ -679,7 +650,7 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 	}
 
 	commandName := arguments[0]
-	logVerbose("Command name: %s", commandName)
+	c.logVerbose("Command name: %s", commandName)
 
 	index := -1
 	for i, command := range commands {
@@ -698,15 +669,15 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 	}
 
 	command := commands[index]
-	logVerbose("Found command: %s - %s", command.Name, command.Description)
+	c.logVerbose("Found command: %s - %s", command.Name, command.Description)
 	if !command.GenerateFiles && !command.GenerateArbitraryFiles {
-		logVerbose("Command does not generate files, checking for invalid file flags")
+		c.logVerbose("Command does not generate files, checking for invalid file flags")
 		for _, flag := range fileFlags {
 			if (flag == "container-dir" && options.ContainerDir != "") ||
 				(flag == "local-dir" && options.LocalDir != "") ||
 				(flag == "keep" && options.Keep) ||
 				(flag == "no-download" && options.NoDownload) {
-				logVerbose("Invalid flag %q detected for command %s", flag, command.Name)
+				c.logVerbose("Invalid flag %q detected for command %s", flag, command.Name)
 				return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for %s", flag, command.Name)}
 			}
 		}
@@ -715,16 +686,16 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 		trimmedMiscArgs := strings.TrimLeft(options.Args, " ")
 		if len(trimmedMiscArgs) > 6 && trimmedMiscArgs[:6] == "start " {
 			noDownload = true
-			logVerbose("asprof start command detected, setting noDownload to true")
+			c.logVerbose("asprof start command detected, setting noDownload to true")
 		} else {
 			noDownload = trimmedMiscArgs == "start"
 			if noDownload {
-				logVerbose("asprof start command detected, setting noDownload to true")
+				c.logVerbose("asprof start command detected, setting noDownload to true")
 			}
 		}
 	}
 	if !command.HasMiscArgs() && options.Args != "" {
-		logVerbose("Command %s does not support --args flag", command.Name)
+		c.logVerbose("Command %s does not support --args flag", command.Name)
 		return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for %s", "args", command.Name)}
 	}
 	if argumentLen == 1 {
@@ -734,7 +705,7 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 	}
 
 	applicationName := arguments[1]
-	logVerbose("Application name: %s", applicationName)
+	c.logVerbose("Application name: %s", applicationName)
 
 	cfSSHArguments := []string{"ssh", applicationName}
 	if options.AppInstanceIndex > 0 {
@@ -745,7 +716,7 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 		return "", &InvalidUsageError{message: fmt.Sprintf("Invalid application instance index %d, must be >= 0", options.AppInstanceIndex)}
 	}
 
-	logVerbose("CF SSH arguments: %v", cfSSHArguments)
+	c.logVerbose("CF SSH arguments: %v", cfSSHArguments)
 
 	supported, err := utils.CheckRequiredTools(applicationName)
 
@@ -753,24 +724,24 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 		return "required tools checking failed", err
 	}
 
-	logVerbose("Required tools check passed")
+	c.logVerbose("Required tools check passed")
 
 	remoteCommandTokens := []string{JavaDetectionCommand}
 
-	logVerbose("Building remote command tokens")
-	logVerbose("Java detection command: %s", JavaDetectionCommand)
+	c.logVerbose("Building remote command tokens")
+	c.logVerbose("Java detection command: %s", JavaDetectionCommand)
 
 	for _, requiredTool := range command.RequiredTools {
-		logVerbose("Setting up required tool: %s", requiredTool)
+		c.logVerbose("Setting up required tool: %s", requiredTool)
 		uppercase := strings.ToUpper(requiredTool)
 		toolCommand := fmt.Sprintf(`%[1]s_TOOL_PATH=$(find -executable -name %[2]s | head -1 | tr -d [:space:]); if [ -z "$%[1]s_TOOL_PATH" ]; then echo "%[2]s not found"; exit 1; fi; %[1]s_COMMAND=$(realpath "$%[1]s_TOOL_PATH")`, uppercase, requiredTool)
 		if requiredTool == "jcmd" {
 			// add code that first checks whether asprof is present and if so use `asprof jcmd` instead of `jcmd`
 			remoteCommandTokens = append(remoteCommandTokens, toolCommand, "ASPROF_COMMAND=$(realpath $(find -executable -name asprof | head -1 | tr -d [:space:])); if [ -n \"${ASPROF_COMMAND}\" ]; then JCMD_COMMAND=\"${ASPROF_COMMAND} jcmd\"; fi")
-			logVerbose("Added jcmd with asprof fallback")
+			c.logVerbose("Added jcmd with asprof fallback")
 		} else {
 			remoteCommandTokens = append(remoteCommandTokens, toolCommand)
-			logVerbose("Added tool command for %s", requiredTool)
+			c.logVerbose("Added tool command for %s", requiredTool)
 		}
 	}
 	fileName := ""
@@ -779,7 +750,7 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 
 	// Initialize fspath and fileName for commands that need them
 	if command.GenerateFiles || command.NeedsFileName || command.GenerateArbitraryFiles {
-		logVerbose("Command requires file generation")
+		c.logVerbose("Command requires file generation")
 		fspath, err = utils.GetAvailablePath(applicationName, remoteDir)
 		if err != nil {
 			return "", fmt.Errorf("failed to get available path: %w", err)
@@ -787,23 +758,23 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 		if fspath == "" {
 			return "", fmt.Errorf("no available path found for file generation")
 		}
-		logVerbose("Available path: %s", fspath)
+		c.logVerbose("Available path: %s", fspath)
 
 		if command.GenerateArbitraryFiles {
 			fspath = fspath + "/" + command.GenerateArbitraryFilesFolderName
-			logVerbose("Updated path for arbitrary files: %s", fspath)
+			c.logVerbose("Updated path for arbitrary files: %s", fspath)
 		}
 
 		fileName = fspath + "/" + applicationName + "-" + command.FileNamePart + "-" + utils.GenerateUUID() + command.FileExtension
 		staticFileName = fspath + "/" + applicationName + command.FileNamePart + command.FileExtension
-		logVerbose("Generated filename: %s", fileName)
-		logVerbose("Generated static filename without UUID: %s", staticFileName)
+		c.logVerbose("Generated filename: %s", fileName)
+		c.logVerbose("Generated static filename without UUID: %s", staticFileName)
 	}
 
 	commandText := command.SSHCommand
 	// Perform variable replacements directly in Go code
 	var err2 error
-	commandText, err2 = replaceVariables(commandText, applicationName, fspath, fileName, staticFileName, options.Args)
+	commandText, err2 = c.replaceVariables(commandText, applicationName, fspath, fileName, staticFileName, options.Args)
 	if err2 != nil {
 		return "", fmt.Errorf("variable replacement failed: %w", err2)
 	}
@@ -811,21 +782,21 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 	// For arbitrary files commands, insert mkdir and cd before the main command
 	if command.GenerateArbitraryFiles {
 		remoteCommandTokens = append(remoteCommandTokens, "mkdir -p "+fspath, "cd "+fspath, commandText)
-		logVerbose("Added directory creation and navigation before command execution")
+		c.logVerbose("Added directory creation and navigation before command execution")
 	} else {
 		remoteCommandTokens = append(remoteCommandTokens, commandText)
 	}
 
-	logVerbose("Command text after replacements: %s", commandText)
-	logVerbose("Full remote command tokens: %v", remoteCommandTokens)
+	c.logVerbose("Command text after replacements: %s", commandText)
+	c.logVerbose("Full remote command tokens: %v", remoteCommandTokens)
 
 	cfSSHArguments = append(cfSSHArguments, "--command")
 	remoteCommand := strings.Join(remoteCommandTokens, "; ")
 
-	logVerbose("Final remote command: %s", remoteCommand)
+	c.logVerbose("Final remote command: %s", remoteCommand)
 
 	if options.DryRun {
-		logVerbose("Dry-run mode enabled, returning command without execution")
+		c.logVerbose("Dry-run mode enabled, returning command without execution")
 		// When printing out the entire command line for separate execution, we wrap the remote command in single quotes
 		// to prevent the shell processing it from running it in local
 		cfSSHArguments = append(cfSSHArguments, "'"+remoteCommand+"'")
@@ -833,7 +804,7 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 	}
 
 	fullCommand := append(cfSSHArguments, remoteCommand)
-	logVerbose("Executing command: %v", cfSSHArguments)
+	c.logVerbose("Executing command: %v", cfSSHArguments)
 
 	output, err := cliConnection.CliCommand(fullCommand...)
 	if err != nil {
@@ -847,26 +818,26 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 	}
 
 	if command.GenerateFiles {
-		logVerbose("Processing file generation and download")
+		c.logVerbose("Processing file generation and download")
 
 		var finalFile string
 		var err error
 		switch command.FileExtension {
 		case ".hprof":
-			logVerbose("Finding heap dump file")
+			c.logVerbose("Finding heap dump file")
 			finalFile, err = utils.FindHeapDumpFile(cfSSHArguments, fileName, fspath)
 		case ".jfr":
-			logVerbose("Finding JFR file")
+			c.logVerbose("Finding JFR file")
 			finalFile, err = utils.FindJFRFile(cfSSHArguments, fileName, fspath)
 		default:
 			return "", &InvalidUsageError{message: fmt.Sprintf("Unsupported file extension %q", command.FileExtension)}
 		}
 		if err == nil && finalFile != "" {
 			fileName = finalFile
-			logVerbose("Found file: %s", finalFile)
+			c.logVerbose("Found file: %s", finalFile)
 			fmt.Println("Successfully created " + command.FileLabel + " in application container at: " + fileName)
 		} else if !noDownload {
-			logVerbose("Failed to find file, error: %v", err)
+			c.logVerbose("Failed to find file, error: %v", err)
 			fmt.Println("Failed to find " + command.FileLabel + " in application container")
 			return "", err
 		}
@@ -877,74 +848,74 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 		}
 
 		localFileFullPath := localDir + "/" + applicationName + "-" + command.FileNamePart + "-" + utils.GenerateUUID() + command.FileExtension
-		logVerbose("Downloading file to: %s", localFileFullPath)
+		c.logVerbose("Downloading file to: %s", localFileFullPath)
 		err = utils.CopyOverCat(cfSSHArguments, fileName, localFileFullPath)
 		if err == nil {
-			logVerbose("File download completed successfully")
+			c.logVerbose("File download completed successfully")
 			fmt.Println(utils.ToSentenceCase(command.FileLabel) + " file saved to: " + localFileFullPath)
 		} else {
-			logVerbose("File download failed: %v", err)
+			c.logVerbose("File download failed: %v", err)
 			return "", err
 		}
 
 		if !keepAfterDownload {
-			logVerbose("Deleting remote file")
+			c.logVerbose("Deleting remote file")
 			err = utils.DeleteRemoteFile(cfSSHArguments, fileName)
 			if err != nil {
-				logVerbose("Failed to delete remote file: %v", err)
+				c.logVerbose("Failed to delete remote file: %v", err)
 				return "", err
 			}
-			logVerbose("Remote file deleted successfully")
+			c.logVerbose("Remote file deleted successfully")
 			fmt.Println(utils.ToSentenceCase(command.FileLabel) + " file deleted in application container")
 		} else {
-			logVerbose("Keeping remote file as requested")
+			c.logVerbose("Keeping remote file as requested")
 		}
 	}
 	if command.GenerateArbitraryFiles && !noDownload {
-		logVerbose("Processing arbitrary files download: %s", fspath)
-		logVerbose("cfSSHArguments: %v", cfSSHArguments)
+		c.logVerbose("Processing arbitrary files download: %s", fspath)
+		c.logVerbose("cfSSHArguments: %v", cfSSHArguments)
 		// download all files in the generic folder
 		files, err := utils.ListFiles(cfSSHArguments, fspath)
 		for i, file := range files {
-			logVerbose("File %d: %s", i+1, file)
+			c.logVerbose("File %d: %s", i+1, file)
 		}
 		if err != nil {
-			logVerbose("Failed to list files: %v", err)
+			c.logVerbose("Failed to list files: %v", err)
 			return "", err
 		}
-		logVerbose("Found %d files to download", len(files))
+		c.logVerbose("Found %d files to download", len(files))
 		if len(files) != 0 {
 			for _, file := range files {
-				logVerbose("Downloading file: %s", file)
+				c.logVerbose("Downloading file: %s", file)
 				localFileFullPath := localDir + "/" + file
 				err = utils.CopyOverCat(cfSSHArguments, fspath+"/"+file, localFileFullPath)
 				if err == nil {
-					logVerbose("File %s downloaded successfully", file)
+					c.logVerbose("File %s downloaded successfully", file)
 					fmt.Printf("File %s saved to: %s\n", file, localFileFullPath)
 				} else {
-					logVerbose("Failed to download file %s: %v", file, err)
+					c.logVerbose("Failed to download file %s: %v", file, err)
 					return "", err
 				}
 			}
 
 			if !keepAfterDownload {
-				logVerbose("Deleting remote file folder")
+				c.logVerbose("Deleting remote file folder")
 				err = utils.DeleteRemoteFile(cfSSHArguments, fspath)
 				if err != nil {
-					logVerbose("Failed to delete remote folder: %v", err)
+					c.logVerbose("Failed to delete remote folder: %v", err)
 					return "", err
 				}
-				logVerbose("Remote folder deleted successfully")
+				c.logVerbose("Remote folder deleted successfully")
 				fmt.Println("File folder deleted in application container")
 			} else {
-				logVerbose("Keeping remote files as requested")
+				c.logVerbose("Keeping remote files as requested")
 			}
 		} else {
-			logVerbose("No files found to download")
+			c.logVerbose("No files found to download")
 		}
 	}
 	// We keep this around to make the compiler happy, but commandExecutor.Execute will cause an os.Exit
-	logVerbose("Command execution completed successfully")
+	c.logVerbose("Command execution completed successfully")
 	return strings.Join(output, "\n"), err
 }
 
@@ -952,11 +923,11 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 // defined by the core CLI.
 //
 // GetMetadata() returns a PluginMetadata struct. The first field, Name,
-// determines the Name of the plugin which should generally be without spaces.
-// If there are spaces in the Name a user will need to properly quote the Name
-// during uninstall otherwise the Name will be treated as separate arguments.
+// determines the name of the plugin, which should generally be without spaces.
+// If there are spaces in the name, a user will need to properly quote the name
+// during uninstall; otherwise, the name will be treated as separate arguments.
 // The second value is a slice of Command structs. Our slice only contains one
-// Command Struct, but could contain any number of them. The first field Name
+// Command struct, but could contain any number of them. The first field Name
 // defines the command `cf heapdump` once installed into the CLI. The
 // second field, HelpText, is used by the core CLI to display help information
 // to the user in the core commands `cf help`, `cf`, or `cf -h`.
@@ -1002,7 +973,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 				// It is used to show help of usage of each command
 				UsageDetails: plugin.Usage{
 					Usage:   usageText,
-					Options: generateOptionsMapFromFlags(),
+					Options: c.generateOptionsMapFromFlags(),
 				},
 			},
 		},
@@ -1010,7 +981,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 }
 
 // Unlike most Go programs, the `main()` function will not be used to run all of the
-// commands provided in your plugin. Main will be used to initialize the plugin
+// commands provided in your plugin. main will be used to initialize the plugin
 // process, as well as any dependencies you might require for your
 // plugin.
 func main() {
