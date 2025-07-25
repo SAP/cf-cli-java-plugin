@@ -63,19 +63,6 @@ cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/sn
 cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-linux-amd64
 ```
 
-### Updating from version 1.x to 2.x
-
-With release 2.0 we aligned the convention of the plugin having the same name as the command it contributes (in our
-case, `java`). This change mostly affects you in the way you update your plugin. If you have the version 1.x installed,
-you will need to uninstall the old version first by using the command: `cf uninstall-plugin JavaPlugin`. You know you
-have the version 1.x installed if `JavaPlugin` appears in the output of `cf plugins`.
-
-### Permission Issues
-
-On Linux and macOS, if you get a permission error, run `chmod +x [cf-cli-java-plugin]` (replace `[cf-cli-java-plugin]`
-with the actual binary name you will use, which depends on the OS you are running) on the plugin binary. On Windows, the
-plugin will refuse to install unless the binary has the `.exe` file extension.
-
 ## Usage
 
 ### Prerequisites
@@ -288,6 +275,13 @@ USAGE:
         Get the status of async-profiler on a running Java application
 
 OPTIONS:
+   -dry-run                  -n, just output to command line what would be executed
+   -keep                     -k, keep the heap dump in the container; by default the heap dump/JFR/... will
+                               be deleted from the container's filesystem after being downloaded
+   -local-dir                -ld, the local directory path that the dump/JFR/... file will be saved to,
+                                defaults to the current directory
+   -no-download              -nd, don't download the heap dump/JFR/... file to local, only keep it in the
+                                container, implies '--keep'
    -verbose                  -v, enable verbose output for the plugin
    -app-instance-index       -i [index], select to which instance of the app to connect
    -args                     -a, Miscellaneous arguments to pass to the command (if supported) in the
@@ -298,13 +292,6 @@ OPTIONS:
                                application name, and generated file name respectively.
    -container-dir            -cd, the directory path in the container that the heap dump/JFR/... file will be
                                 saved to
-   -dry-run                  -n, just output to command line what would be executed
-   -keep                     -k, keep the heap dump in the container; by default the heap dump/JFR/... will
-                               be deleted from the container's filesystem after being downloaded
-   -local-dir                -ld, the local directory path that the dump/JFR/... file will be saved to,
-                                defaults to the current directory
-   -no-download              -nd, don't download the heap dump/JFR/... file to local, only keep it in the
-                                container, implies '--keep'
 
 </pre>
 
