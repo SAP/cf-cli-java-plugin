@@ -38,7 +38,6 @@ jobs:
           cd test
           source venv/bin/activate
           ../scripts/lint-python.sh ci
-      - name: Python test
 
   build:
     name: Build and Test Go Plugin
