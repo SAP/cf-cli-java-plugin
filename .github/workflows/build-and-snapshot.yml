@@ -12,7 +12,7 @@ on:
 
 jobs:
   lint-and-test-python:
-    name: Python Test Suite
+    name: Lint Python Test Suite
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || github.event_name == 'push'
 
@@ -38,6 +38,7 @@ jobs:
           cd test
           source venv/bin/activate
           ../scripts/lint-python.sh ci
+      - name: Python test
 
   build:
     name: Build and Test Go Plugin
@@ -59,12 +60,13 @@ jobs:
       - name: Install dependencies
         run: go mod tidy -e || true
 
-      - name: Lint Go files
-        run: |
-          echo "🔍 Running go fmt..."
-          go fmt .
-          echo "🔍 Running go vet..."
-          go vet .
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+
+      - name: Lint and format Go files
+        run: ./scripts/lint-go.sh ci
 
       - name: Build binary
         run: |

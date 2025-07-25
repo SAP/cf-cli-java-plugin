@@ -1,15 +1,30 @@
+// Package utils provides utility functions for Cloud Foundry CLI Java plugin operations.
 package utils
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"slices"
+	"sort"
 	"strings"
+
+	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
+// Version represents a semantic version with major, minor, and build numbers.
+type Version struct {
+	Major int
+	Minor int
+	Build int
+}
+
+// CFAppEnv represents the environment configuration for a Cloud Foundry application,
+// including environment variables, staging configuration, and system services.
 type CFAppEnv struct {
 	EnvironmentVariables struct {
 		JbpConfigSpringAutoReconfiguration string `json:"JBP_CONFIG_SPRING_AUTO_RECONFIGURATION"`
@@ -62,13 +77,34 @@ type CFAppEnv struct {
 	} `json:"application_env_json"`
 }
 
+// GenerateUUID generates a new RFC 4122 Version 4 UUID using Go's built-in crypto/rand.
+func GenerateUUID() string {
+	// Generate 16 random bytes
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		panic(err) // This should never happen with crypto/rand
+	}
+
+	// Set version (4) and variant bits according to RFC 4122
+	bytes[6] = (bytes[6] & 0x0f) | 0x40 // Version 4
+	bytes[8] = (bytes[8] & 0x3f) | 0x80 // Variant bits
+
+	// Format as UUID string: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+	return fmt.Sprintf("%s-%s-%s-%s-%s",
+		hex.EncodeToString(bytes[0:4]),
+		hex.EncodeToString(bytes[4:6]),
+		hex.EncodeToString(bytes[6:8]),
+		hex.EncodeToString(bytes[8:10]),
+		hex.EncodeToString(bytes[10:16]))
+}
+
 func readAppEnv(app string) ([]byte, error) {
 	guid, err := exec.Command("cf", "app", app, "--guid").Output()
 	if err != nil {
 		return nil, err
 	}
 
-	env, err := exec.Command("cf", "curl", fmt.Sprintf("/v3/apps/%s/env", strings.Trim(string(guid[:]), "\n"))).Output()
+	env, err := exec.Command("cf", "curl", fmt.Sprintf("/v3/apps/%s/env", strings.Trim(string(guid), "\n"))).Output()
 	if err != nil {
 		return nil, err
 	}
@@ -81,20 +117,22 @@ func checkUserPathAvailability(app string, path string) (bool, error) {
 		return false, err
 	}
 
-	if strings.Contains(string(output[:]), "exists and read-writeable") {
+	if strings.Contains(string(output), "exists and read-writeable") {
 		return true, nil
 	}
 
 	return false, nil
 }
 
+// FindReasonForAccessError determines the reason why accessing a Cloud Foundry app failed,
+// providing helpful diagnostic information and suggestions.
 func FindReasonForAccessError(app string) string {
 	out, err := exec.Command("cf", "apps").Output()
 	if err != nil {
 		return "cf is not logged in, please login and try again"
 	}
-	// find all app names
-	lines := strings.Split(string(out[:]), "\n")
+	// Find all app names
+	lines := strings.Split(string(out), "\n")
 	appNames := []string{}
 	foundHeader := false
 	for _, line := range lines {
@@ -114,6 +152,8 @@ func FindReasonForAccessError(app string) string {
 	return "Could not find " + app + ". Did you mean " + matches[0] + "?"
 }
 
+// CheckRequiredTools verifies that the necessary tools and permissions are available
+// for the specified Cloud Foundry application, including SSH access.
 func CheckRequiredTools(app string) (bool, error) {
 	guid, err := exec.Command("cf", "app", app, "--guid").Output()
 	if err != nil {
@@ -124,7 +164,7 @@ func CheckRequiredTools(app string) (bool, error) {
 		return false, err
 	}
 	var result map[string]any
-	if err := json.Unmarshal([]byte(output), &result); err != nil {
+	if err := json.Unmarshal(output, &result); err != nil {
 		return false, err
 	}
 
@@ -135,6 +175,8 @@ func CheckRequiredTools(app string) (bool, error) {
 	return true, nil
 }
 
+// GetAvailablePath determines the best available path for operations on the Cloud Foundry app,
+// preferring user-specified paths and falling back to volume mounts or /tmp.
 func GetAvailablePath(data string, userpath string) (string, error) {
 	if len(userpath) > 0 {
 		valid, _ := checkUserPathAvailability(data, userpath)
@@ -147,7 +189,7 @@ func GetAvailablePath(data string, userpath string) (string, error) {
 
 	env, err := readAppEnv(data)
 	if err != nil {
-		return "/tmp", nil
+		return "/tmp", err
 	}
 
 	var cfAppEnv CFAppEnv
@@ -166,12 +208,18 @@ func GetAvailablePath(data string, userpath string) (string, error) {
 	return "/tmp", nil
 }
 
+// CopyOverCat copies a remote file to a local destination using the cf ssh command and cat.
 func CopyOverCat(args []string, src string, dest string) error {
-	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return errors.New("Error creating local file at  " + dest + ". Please check that you are allowed to create files at the given local path.")
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			// Log the error, but don't override the main function's error
+			fmt.Fprintf(os.Stderr, "Warning: failed to close file %s: %v\n", dest, closeErr)
+		}
+	}()
 
 	args = append(args, "cat "+src)
 	cat := exec.Command("cf", args...)
@@ -180,56 +228,69 @@ func CopyOverCat(args []string, src string, dest string) error {
 
 	err = cat.Start()
 	if err != nil {
-		return errors.New("error occured during copying dump file: " + src + ", please try again.")
+		return errors.New("error occurred during copying dump file: " + src + ", please try again.")
 	}
 
 	err = cat.Wait()
 	if err != nil {
-		return errors.New("error occured while waiting for the copying complete")
+		return errors.New("error occurred while waiting for the copying complete")
 	}
 
 	return nil
 }
 
+// DeleteRemoteFile removes a file from the remote Cloud Foundry application container.
 func DeleteRemoteFile(args []string, path string) error {
 	args = append(args, "rm -fr "+path)
 	_, err := exec.Command("cf", args...).Output()
 	if err != nil {
-		return errors.New("error occured while removing dump file generated")
+		return errors.New("error occurred while removing dump file generated")
 	}
 
 	return nil
 }
 
+// FindHeapDumpFile locates heap dump files (*.hprof) in the specified path on the remote container.
 func FindHeapDumpFile(args []string, fullpath string, fspath string) (string, error) {
-	return FindFile(args, fullpath, fspath, "java_pid*.hprof")
+	return FindFile(args, fullpath, fspath, "*.hprof")
 }
 
+// FindJFRFile locates Java Flight Recorder files (*.jfr) in the specified path on the remote container.
 func FindJFRFile(args []string, fullpath string, fspath string) (string, error) {
 	return FindFile(args, fullpath, fspath, "*.jfr")
 }
 
+// FindFile searches for files matching the given pattern in the remote container,
+// returning the most recently modified file that matches.
 func FindFile(args []string, fullpath string, fspath string, pattern string) (string, error) {
 	cmd := " [ -f '" + fullpath + "' ] && echo '" + fullpath + "' ||  find " + fspath + " -name '" + pattern + "' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1 "
 
 	args = append(args, cmd)
 	output, err := exec.Command("cf", args...).Output()
 	if err != nil {
-		return "", errors.New("error while checking the generated file")
+		// Check for SSH authentication errors
+		errorStr := err.Error()
+		if strings.Contains(errorStr, "Error getting one time auth code") ||
+			strings.Contains(errorStr, "Error getting SSH code") ||
+			strings.Contains(errorStr, "Authentication failed") {
+			return "", errors.New("SSH authentication failed - this may be a Cloud Foundry platform issue. Error: " + errorStr)
+		}
+		return "", errors.New("error while checking the generated file: " + errorStr)
 	}
 
-	return strings.Trim(string(output[:]), "\n"), nil
+	return strings.Trim(string(output), "\n"), nil
 }
 
+// ListFiles retrieves a list of files in the specified directory on the remote container.
 func ListFiles(args []string, path string) ([]string, error) {
 	cmd := "ls " + path
 	args = append(args, cmd)
 	output, err := exec.Command("cf", args...).Output()
 	if err != nil {
-		return nil, errors.New("error occured while listing files: " + string(output[:]))
+		return nil, errors.New("error occurred while listing files: " + string(output))
 	}
-	files := strings.Split(strings.Trim(string(output[:]), "\n"), "\n")
-	// filter all empty strings
+	files := strings.Split(strings.Trim(string(output), "\n"), "\n")
+	// Filter all empty strings
 	j := 0
 	for _, s := range files {
 		if s != "" {
@@ -238,4 +299,108 @@ func ListFiles(args []string, path string) ([]string, error) {
 		}
 	}
 	return files[:j], nil
+}
+
+// FuzzySearch returns up to `maxResults` words from `words` that are closest in
+// Levenshtein distance to `needle`.
+func FuzzySearch(needle string, words []string, maxResults int) []string {
+	type match struct {
+		distance int
+		word     string
+	}
+
+	matches := make([]match, 0, len(words))
+	for _, w := range words {
+		matches = append(matches, match{
+			distance: fuzzy.LevenshteinDistance(needle, w),
+			word:     w,
+		})
+	}
+
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].distance < matches[j].distance
+	})
+
+	if maxResults > len(matches) {
+		maxResults = len(matches)
+	}
+
+	results := make([]string, 0, maxResults)
+	for i := range maxResults {
+		results = append(results, matches[i].word)
+	}
+
+	return results
+}
+
+// JoinWithOr joins strings with commas and "or" for the last element: "x, y, or z".
+func JoinWithOr(a []string) string {
+	if len(a) == 0 {
+		return ""
+	}
+	if len(a) == 1 {
+		return a[0]
+	}
+	return strings.Join(a[:len(a)-1], ", ") + ", or " + a[len(a)-1]
+}
+
+// WrapTextWithPrefix wraps text to fit within maxWidth characters per line,
+// with the first line using the given prefix and subsequent lines indented to match the prefix length.
+func WrapTextWithPrefix(text, prefix string, maxWidth int, miscLineIndent int) string {
+	maxDescLength := maxWidth - len(prefix)
+
+	if len(text) <= maxDescLength {
+		return prefix + text
+	}
+
+	// Split text into multiple lines if too long.
+	words := strings.Fields(text)
+	var lines []string
+	var currentLine string
+
+	for _, word := range words {
+		testLine := currentLine
+		if testLine != "" {
+			testLine += " "
+		}
+		testLine += word
+
+		if len(testLine) <= maxDescLength {
+			currentLine = testLine
+		} else {
+			if currentLine != "" {
+				lines = append(lines, currentLine)
+			}
+			currentLine = word
+		}
+	}
+	if currentLine != "" {
+		lines = append(lines, currentLine)
+	}
+
+	// Join lines with proper indentation.
+	if len(lines) > 0 {
+		result := prefix + lines[0]
+		indent := strings.Repeat(" ", len(prefix))
+		for i := 1; i < len(lines); i++ {
+			result += "\n" + indent + strings.Repeat(" ", miscLineIndent) + lines[i]
+		}
+		return result
+	}
+
+	// Fallback if no lines were created.
+	return prefix + text
+}
+
+// ToSentenceCase returns the input string with the first character uppercased and the rest lowercased.
+// Handles Unicode and empty strings safely.
+func ToSentenceCase(input string) string {
+	if input == "" {
+		return input
+	}
+	runes := []rune(input)
+	if len(runes) == 1 {
+		return strings.ToUpper(string(runes[0]))
+	}
+	return strings.ToUpper(string(runes[0])) + strings.ToLower(string(runes[1:]))
 }

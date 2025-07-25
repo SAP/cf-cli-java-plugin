@@ -25,8 +25,18 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Set up Node.js for markdownlint
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
       - name: Install Go dependencies
         run: go mod tidy -e || true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
 
       - name: Lint Go code
         run: ./scripts/lint-go.sh ci
@@ -54,6 +64,9 @@ jobs:
       - name: Validate Python code quality
         if: steps.check-python.outputs.python_tests_exist == 'true'
         run: ./scripts/lint-python.sh ci
+
+      - name: Lint Markdown files
+        run: ./scripts/lint-markdown.sh ci
 
       # TODO: Re-enable Python tests when ready
       # - name: Run Python tests
@@ -90,6 +103,7 @@ jobs:
           echo "=================================="
           echo "✅ Go code formatting and linting"
           echo "✅ Go tests"
+          echo "✅ Markdown formatting and linting"
           if [ "${{ steps.check-python.outputs.python_tests_exist }}" == "true" ]; then
             echo "✅ Python code quality checks"
             echo "✅ Python tests"

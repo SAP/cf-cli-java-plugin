@@ -6,8 +6,8 @@
 
 package cmd
 
-// CommandExecutor is an interface that encapsulates the execution of further cf cli commands.
-// By "hiding" the cli command execution in this interface, we can mock the command cli execution in tests.
+// CommandExecutor is an interface that encapsulates the execution of further CF CLI commands.
+// By "hiding" the CLI command execution in this interface, we can mock the command CLI execution in tests.
 type CommandExecutor interface {
 	Execute(args []string) ([]string, error)
 }

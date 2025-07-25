@@ -1,6 +1,7 @@
 # Contributing
 
-When contributing to this repository, please first discuss the change you wish to make via issue before making a change. We restrict the scope of this plugin to keep it maintainable.
+When contributing to this repository, please first discuss the change you wish to make via issue before making a
+change. We restrict the scope of this plugin to keep it maintainable.
 
 We have a [code of conduct](#code-of-conduct), please follow it in all your interactions with the project.
 
@@ -10,16 +11,20 @@ You are welcome to contribute code to the Cloud Foundry CLI Java Plugin in order
 
 There are three important things to know:
 
-1. You must be aware of the Apache License (which describes contributions) and agree to the Contributors License Agreement (CLA).
-   This is common practice in all major Open Source projects.
-   To make this process as simple as possible, we are using the [CLA assistant](https://cla-assistant.io/) for individual contributions.
-   CLA assistant is an open source tool that integrates with GitHub very well and enables a one-click-experience for accepting the CLA.
-   For company contributors, [special rules apply](#company-contributors).
-2. We set ourselves [requirements regarding code style and quality](#pull-request-process), and we kindly ask you to do the same with PRs.
+1. You must be aware of the Apache License (which describes contributions) and agree to the Contributors License
+   Agreement (CLA). This is common practice in all major Open Source projects.
+   To make this process as simple as possible, we are using the [CLA assistant](https://cla-assistant.io/) for
+   individual contributions.
+   CLA assistant is an open source tool that integrates with GitHub very well and enables a one-click-experience
+   for accepting the CLA.
+   For company contributors, special rules apply.
+2. We set ourselves requirements regarding code style and quality, and we kindly ask you to do the same with PRs.
 3. Not all proposed contributions can be accepted.
    Some features may, for example, just fit a separate plugin better.
-   The code must fit the overall direction of Cloud Foundry CLI Java Plugin and really improve it, so there should be some "bang for the byte".
-   For most bug fixes this is a given, but it would be advisable to first discus new major features with the maintainers by opening an issue on the project.
+   The code must fit the overall direction of Cloud Foundry CLI Java Plugin and really improve it, so there should
+   be some "bang for the byte".
+   For most bug fixes this is a given, but it would be advisable to first discus new major features with the
+   maintainers by opening an issue on the project.
 
 ### Pull Request Process
 
@@ -31,18 +36,24 @@ This a checklist of things to keep in your mind when opening pull requests for t
    (mock in depth wherever possible)
 4. Update the README.md with details of changes to the options
 
-Pull requests will be tested and validated by maintainers. In case small changes are needed (e.g., correcting typos), the maintainers may fix those issues themselves.
+Pull requests will be tested and validated by maintainers. In case small changes are needed (e.g., correcting typos),
+the maintainers may fix those issues themselves.
 In case of larger issues, you may be asked to apply modifications to your changes before the Pull Request can be merged.
 
 ### Developer Certificate of Origin (DCO)
 
-Due to legal reasons, contributors will be asked to accept a DCO before they submit the first pull request to this projects, this happens in an automated fashion during the submission process. SAP uses [the standard DCO text of the Linux Foundation](https://developercertificate.org/).
+Due to legal reasons, contributors will be asked to accept a DCO before they submit the first pull request to this
+projects, this happens in an automated fashion during the submission process. SAP uses
+[the standard DCO text of the Linux Foundation](https://developercertificate.org/).
 
 ## Contributing with AI-generated code
 
-As artificial intelligence evolves, AI-generated code is becoming valuable for many software projects, including open-source initiatives. While we recognize the potential benefits of incorporating AI-generated content into our open-source projects there a certain requirements that need to be reflected and adhered to when making contributions.
+As artificial intelligence evolves, AI-generated code is becoming valuable for many software projects, including
+open-source initiatives. While we recognize the potential benefits of incorporating AI-generated content into our
+open-source projects there a certain requirements that need to be reflected and adhered to when making contributions.
 
-Please see our [guideline for AI-generated code contributions to SAP Open Source Software Projects](CONTRIBUTING_USING_GENAI.md) for these requirements.
+Please see our [guideline for AI-generated code contributions to SAP Open Source Software Projects](CONTRIBUTING_USING_GENAI.md)
+for these requirements.
 
 ## Code of Conduct
 

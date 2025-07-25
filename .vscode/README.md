@@ -5,6 +5,7 @@ This directory contains a comprehensive VS Code configuration for developing and
 ## Quick Start
 
 1. **Open the workspace**: Use the workspace file in the root directory:
+
    ```bash
    code ../cf-java-plugin.code-workspace
    ```
@@ -33,6 +34,7 @@ This directory contains a comprehensive VS Code configuration for developing and
 ### ⚡ Tasks (Ctrl/Cmd + Shift + P → "Tasks: Run Task")
 
 #### Test Execution
+
 - **Run All Tests** - Execute all tests
 - **Run Current Test File** - Run the currently open test file
 - **Run Basic Commands Tests** - Basic command functionality
@@ -45,6 +47,7 @@ This directory contains a comprehensive VS Code configuration for developing and
 - **Generate HTML Test Report** - Create HTML test report
 
 #### Development Tools
+
 - **Setup Virtual Environment** - Initialize/setup the Python environment
 - **Clean Test Artifacts** - Clean up test files and artifacts
 - **Interactive Test Runner** - Launch interactive test selector
@@ -76,6 +79,7 @@ Type these prefixes and press Tab for instant code generation:
 ## Test Organization & Filtering
 
 ### By File
+
 ```bash
 pytest test_basic_commands.py -v    # Basic commands
 pytest test_jfr.py -v              # JFR tests
@@ -84,6 +88,7 @@ pytest test_cf_java_plugin.py -v    # Integration tests
 ```
 
 ### By Test Class
+
 ```bash
 pytest test_basic_commands.py::TestHeapDump -v      # Only heap dump tests
 pytest test_jfr.py::TestJFRBasic -v                 # Basic JFR functionality
@@ -91,12 +96,14 @@ pytest test_asprof.py::TestAsprofProfiles -v        # Async-profiler profiles
 ```
 
 ### By Pattern
+
 ```bash
 pytest -k "heap" -v                 # All heap-related tests
 pytest -k "jfr or asprof" -v        # All profiling tests
 ```
 
 ### By Markers
+
 ```bash
 pytest -m "sapmachine21" -v         # SapMachine-specific tests
 ```
@@ -112,18 +119,20 @@ pytest -m "sapmachine21" -v         # SapMachine-specific tests
 ## Test Execution Patterns
 
 ### Quick Development Cycle
+
 1. Edit test file
 2. Press F5 → "Debug Current Test File"
 3. Fix issues and repeat
 
 ### Focused Testing
+
 1. Use custom filter: F5 → "Debug Custom Filter"
 2. Enter pattern like "heap and download"
 3. Debug only matching tests
 
 ## File Organization
 
-```
+```text
 test/
 ├── .vscode/                    # VS Code configuration
 │   ├── launch.json            # Debug configurations
@@ -152,16 +161,19 @@ test/
 ## Troubleshooting
 
 ### Python Environment Issues
+
 1. Ensure virtual environment is created: Run "Setup Virtual Environment" task
 2. Check Python interpreter: Bottom left corner should show `./venv/bin/python`
 3. Reload window: Ctrl/Cmd + Shift + P → "Developer: Reload Window"
 
 ### Test Discovery Issues
+
 1. Save all files (tests auto-discover on save)
 2. Check PYTHONPATH in terminal
 3. Verify test files follow `test_*.py` naming
 
 ### Extension Issues
+
 1. Install recommended extensions when prompted
 2. Check Extensions panel for any issues
 3. Restart VS Code if needed
@@ -169,10 +181,13 @@ test/
 ## Advanced Features
 
 ### Parallel Testing
+
 Use the "Run Tests in Parallel" task for faster execution on multi-core systems.
 
 ### HTML Reports
+
 Generate comprehensive HTML test reports with the "Generate HTML Test Report" task.
 
 ### Interactive Runner
+
 Launch `test_runner.py` for menu-driven test selection and execution.

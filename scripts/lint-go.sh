@@ -46,12 +46,28 @@ case "$MODE" in
     "check")
         print_info "Running Go code quality checks..."
         
-        echo "🔍 Running go fmt..."
-        if ! go fmt .; then
-            print_error "Go formatting issues found. Run 'go fmt .' to fix."
-            exit 1
+        echo "🔍 Running gofumpt..."
+        if command -v gofumpt >/dev/null 2>&1; then
+            # Get only Git-tracked Go files
+            GO_FILES=$(git ls-files '*.go')
+            if [ -n "$GO_FILES" ]; then
+                if ! echo "$GO_FILES" | xargs gofumpt -l -w; then
+                    print_error "Go formatting issues found with gofumpt"
+                    exit 1
+                fi
+                print_status "gofumpt formatting check passed on Git-tracked files"
+            else
+                print_warning "No Git-tracked Go files found"
+            fi
+        else
+            echo "🔍 Running go fmt..."
+            if ! go fmt ./...; then
+                print_error "Go formatting issues found. Run 'go fmt ./...' to fix."
+                exit 1
+            fi
+            print_status "Go formatting check passed"
+            print_info "For better formatting, install gofumpt: go install mvdan.cc/gofumpt@latest"
         fi
-        print_status "Go formatting check passed"
         
         echo "🔍 Running go vet..."
         if ! go vet .; then
@@ -60,6 +76,17 @@ case "$MODE" in
         fi
         print_status "Go vet check passed"
         
+        echo "🔍 Running golangci-lint..."
+        if command -v golangci-lint >/dev/null 2>&1; then
+            if (! golangci-lint run --timeout=3m *.go || ! golangci-lint run utils/*.go); then
+                print_error "golangci-lint issues found"
+                exit 1
+            fi
+        else
+            print_warning "golangci-lint not found, skipping comprehensive linting"
+            print_info "Install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"
+        fi
+    
         print_status "All Go linting checks passed!"
         ;;
         
@@ -69,10 +96,18 @@ case "$MODE" in
         echo "🔍 Installing dependencies..."
         go mod tidy -e || true
         
-        echo "🔍 Running go fmt..."
-        if ! go fmt .; then
-            print_error "Go formatting issues found"
-            exit 1
+        echo "🔍 Running gofumpt..."
+        if command -v gofumpt >/dev/null 2>&1; then
+            if ! gofumpt -l -w *.go cmd/ utils/; then
+                print_error "Go formatting issues found with gofumpt"
+                exit 1
+            fi
+        else
+            echo "🔍 Running go fmt..."
+            if ! go fmt ./...; then
+                print_error "Go formatting issues found"
+                exit 1
+            fi
         fi
         
         echo "🔍 Running go vet..."

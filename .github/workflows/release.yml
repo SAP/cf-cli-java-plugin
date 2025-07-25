@@ -43,6 +43,11 @@ jobs:
       - name: Install dependencies
         run: go mod tidy -e || true
 
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+
       - name: Lint Go files
         run: ./scripts/lint-go.sh ci
 
@@ -151,59 +156,7 @@ jobs:
             dist/*
             plugin-repo-entry.yml
             plugin-repo-summary.txt
-          body: |
-            ## CF CLI Java Plugin ${{ github.event.inputs.version }}
-            
-            Plugin for profiling Java applications and getting heap and thread-dumps.
-            
-            ## Changes
-            
-            $(cat release_changelog.txt || echo "No changelog available")
-            
-            ## Installation
-
-            ### Installation via CF Community Repository
-
-            Make sure you have the CF Community plugin repository configured or add it via:
-            ```bash
-            cf add-plugin-repo CF-Community http://plugins.cloudfoundry.org
-            ```
-
-            Trigger installation of the plugin via:
-            ```bash
-            cf install-plugin -r CF-Community "java"
-            ```
-
-            ### Manual Installation
-
-            Download this specific release (${{ github.event.inputs.version }}) and install manually:
-
-            ```bash
-            # on Mac arm64
-            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/${{ github.event.inputs.version }}/cf-cli-java-plugin-macos-arm64
-            # on Windows x86
-            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/${{ github.event.inputs.version }}/cf-cli-java-plugin-windows-amd64
-            # on Linux x86
-            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/${{ github.event.inputs.version }}/cf-cli-java-plugin-linux-amd64
-            ```
-
-            Or download the latest release:
-
-            ```bash
-            # on Mac arm64
-            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/latest/download/cf-cli-java-plugin-macos-arm64
-            # on Windows x86
-            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/latest/download/cf-cli-java-plugin-windows-amd64
-            # on Linux x86
-            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/latest/download/cf-cli-java-plugin-linux-amd64
-            ```
-
-            **Note:** On Linux and macOS, if you get a permission error, run `chmod +x [cf-cli-java-plugin]` on the plugin binary.
-            On Windows, the plugin will refuse to install unless the binary has the `.exe` file extension.
-
-            You can verify that the plugin is successfully installed by looking for `java` in the output of `cf plugins`.
-
-            **Build Timestamp**: ${{ steps.timestamp.outputs.timestamp }}
+          body_path: release_notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

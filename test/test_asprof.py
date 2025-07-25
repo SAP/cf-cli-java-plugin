@@ -25,7 +25,7 @@ class TestAsprofBasic(TestBase):
     def test_start_provides_stop_instruction(self, t, app):
         """Test that asprof-start provides clear stop instructions."""
         t.run(f"asprof-start-cpu {app}").should_succeed().should_contain(f"Use 'cf java asprof-stop {app}'")
-
+        time.sleep(1)  # Allow some time for the command to register
         # Clean up
         t.run(f"asprof-stop {app} --no-download").should_succeed().should_create_remote_file(
             "*.jfr"
