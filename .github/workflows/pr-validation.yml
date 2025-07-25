@@ -36,6 +36,9 @@ jobs:
       - name: Install golangci-lint
         run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
+      - name: Add Go bin to PATH
+        run: echo "${HOME}/go/bin" >> $GITHUB_PATH
+
       - name: Lint Go code
         run: ./scripts/lint-go.sh ci
 
