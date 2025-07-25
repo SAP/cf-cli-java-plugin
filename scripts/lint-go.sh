@@ -112,6 +112,8 @@ case "$MODE" in
         fi
         
         echo "🔍 Running golangci-lint..."
+        which golangci-lint
+        golangci-lint --version
         if command -v golangci-lint >/dev/null 2>&1; then
             if ! golangci-lint run --timeout=5m *.go; then
                 print_error "golangci-lint issues found"
