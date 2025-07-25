@@ -6,17 +6,6 @@ version: "2"
 run:
   timeout: 5m
 
-linters-settings:
-  
-  # Cyclomatic complexity
-  cyclop:
-    max-complexity: 10
-  
-  # Function length
-  funlen:
-    lines: 60
-    statements: 40
-
 linters:
   enable:
     # Core linters (enabled by default but explicitly listed)
