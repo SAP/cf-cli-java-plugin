@@ -65,6 +65,10 @@ jobs:
           echo "${HOME}/go/bin" >> $GITHUB_PATH
           which golangci-lint
           golangci-lint --version
+      - name: Check golangci-lint version and path
+        run: |
+          which golangci-lint
+          golangci-lint --version
 
       - name: Lint Go files
         run: ./scripts/lint-go.sh ci
