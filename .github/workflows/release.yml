@@ -43,6 +43,13 @@ jobs:
       - name: Install dependencies
         run: go mod tidy -e || true
 
+      - name: Install golangci-lint
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          echo "${HOME}/go/bin" >> $GITHUB_PATH
+          which golangci-lint
+          golangci-lint --version
+
       - name: Lint Go files
         run: ./scripts/lint-go.sh ci
 
