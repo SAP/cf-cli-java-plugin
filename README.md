@@ -16,6 +16,20 @@ Currently, it allows you to:
 
 ## Installation
 
+### Installation via CF Community Repository
+
+Make sure you have the CF Community plugin repository configured (or add it via
+`cf add-plugin-repo CF-Community http://plugins.cloudfoundry.org`)
+
+Trigger installation of the plugin via
+
+```sh
+cf install-plugin java
+```
+
+The releases in the community repository are older than the actual releases on GitHub, that you can install manually, so
+we recommend the manual installation.
+
 ### Manual Installation
 
 Download the latest release from [GitHub](https://github.com/SAP/cf-cli-java-plugin/releases/latest).
@@ -32,20 +46,6 @@ cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/latest/down
 ```
 
 You can verify that the plugin is successfully installed by looking for `java` in the output of `cf plugins`.
-
-### Installation via CF Community Repository
-
-Make sure you have the CF Community plugin repository configured (or add it via
-`cf add-plugin-repo CF-Community http://plugins.cloudfoundry.org`)
-
-Trigger installation of the plugin via
-
-```sh
-cf install-plugin java
-```
-
-The releases in the community repository are older than the actual releases on GitHub, that you can install manually, so
-we recommend the manual installation.
 
 ### Manual Installation of Snapshot Release
 
@@ -288,10 +288,6 @@ USAGE:
         Get the status of async-profiler on a running Java application
 
 OPTIONS:
-   -local-dir                -ld, the local directory path that the dump/JFR/... file will be saved to,
-                                defaults to the current directory
-   -no-download              -nd, don't download the heap dump/JFR/... file to local, only keep it in the
-                                container, implies '--keep'
    -verbose                  -v, enable verbose output for the plugin
    -app-instance-index       -i [index], select to which instance of the app to connect
    -args                     -a, Miscellaneous arguments to pass to the command (if supported) in the
@@ -305,6 +301,10 @@ OPTIONS:
    -dry-run                  -n, just output to command line what would be executed
    -keep                     -k, keep the heap dump in the container; by default the heap dump/JFR/... will
                                be deleted from the container's filesystem after being downloaded
+   -local-dir                -ld, the local directory path that the dump/JFR/... file will be saved to,
+                                defaults to the current directory
+   -no-download              -nd, don't download the heap dump/JFR/... file to local, only keep it in the
+                                container, implies '--keep'
 
 </pre>
 
