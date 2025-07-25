@@ -70,18 +70,6 @@ case "$MODE" in
         fi
         print_status "Go vet check passed"
         
-        echo "🔍 Running golangci-lint..."
-        if command -v golangci-lint >/dev/null 2>&1; then
-            if ! golangci-lint run --timeout=3m *.go; then
-                print_error "golangci-lint issues found"
-                exit 1
-            fi
-            print_status "golangci-lint check passed"
-        else
-            print_warning "golangci-lint not found, skipping comprehensive linting"
-            print_info "Install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"
-        fi
-        
         print_status "All Go linting checks passed!"
         ;;
         
@@ -108,21 +96,6 @@ case "$MODE" in
         echo "🔍 Running go vet..."
         if ! go vet .; then
             print_error "Go vet issues found"
-            exit 1
-        fi
-        
-        echo "🔍 Running golangci-lint..."
-        which golangci-lint
-        golangci-lint --version
-        if command -v golangci-lint >/dev/null 2>&1; then
-            if ! golangci-lint run --timeout=5m *.go; then
-                print_error "golangci-lint issues found"
-                exit 1
-            fi
-            print_status "golangci-lint check passed"
-        else
-            print_error "golangci-lint not found in CI environment"
-            print_info "Install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"
             exit 1
         fi
         

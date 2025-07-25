@@ -288,8 +288,6 @@ USAGE:
         Get the status of async-profiler on a running Java application
 
 OPTIONS:
-   -container-dir            -cd, the directory path in the container that the heap dump/JFR/... file will be
-                                saved to
    -dry-run                  -n, just output to command line what would be executed
    -keep                     -k, keep the heap dump in the container; by default the heap dump/JFR/... will
                                be deleted from the container's filesystem after being downloaded
@@ -305,6 +303,8 @@ OPTIONS:
                                variables @FSPATH, @ARGS, @APP_NAME, @FILE_NAME, and @STATIC_FILE_NAME are
                                available in --args to reference the working directory path, arguments,
                                application name, and generated file name respectively.
+   -container-dir            -cd, the directory path in the container that the heap dump/JFR/... file will be
+                                saved to
 
 </pre>
 
