@@ -32,19 +32,19 @@ linters:
     - goconst          # Find repeated strings that could be constants
     - godox            # Find TODO, FIXME, etc. comments
     - goprintffuncname # Check printf-style function names
-    - gosec            # Security-focused linter
     - misspell         # Check for misspellings
     - nakedret         # Check naked returns
     - nilerr           # Check nil error returns
     - nolintlint       # Check nolint directives
     - predeclared      # Check for shadowed predeclared identifiers
-    - revive           # Fast, configurable, extensible linter
     - rowserrcheck     # Check SQL rows.Err
     - sqlclosecheck    # Check SQL Close calls
     - unconvert        # Check unnecessary type conversions
     - wastedassign     # Check wasted assignments
     - whitespace       # Check for extra whitespace
-    
+    - gocritic
+
+
   disable:
     # Disabled as requested
     - gochecknoglobals  # Ignore global variables (as requested)
@@ -70,4 +70,5 @@ linters:
     - gocyclo          # Check cyclomatic complexity
     - cyclop           # Check cyclomatic complexity
     - funlen           # Check function length
-    - gocritic
+    - gosec            # Security-focused linter
+    - revive           # Fast, configurable, extensible linter

@@ -1,3 +1,4 @@
+// Package utils provides utility functions for Cloud Foundry CLI Java plugin operations.
 package utils
 
 import (
@@ -22,6 +23,8 @@ type Version struct {
 	Build int
 }
 
+// CFAppEnv represents the environment configuration for a Cloud Foundry application,
+// including environment variables, staging configuration, and system services.
 type CFAppEnv struct {
 	EnvironmentVariables struct {
 		JbpConfigSpringAutoReconfiguration string `json:"JBP_CONFIG_SPRING_AUTO_RECONFIGURATION"`
@@ -78,7 +81,9 @@ type CFAppEnv struct {
 func GenerateUUID() string {
 	// Generate 16 random bytes
 	bytes := make([]byte, 16)
-	rand.Read(bytes)
+	if _, err := rand.Read(bytes); err != nil {
+		panic(err) // This should never happen with crypto/rand
+	}
 
 	// Set version (4) and variant bits according to RFC 4122
 	bytes[6] = (bytes[6] & 0x0f) | 0x40 // Version 4
@@ -99,7 +104,7 @@ func readAppEnv(app string) ([]byte, error) {
 		return nil, err
 	}
 
-	env, err := exec.Command("cf", "curl", fmt.Sprintf("/v3/apps/%s/env", strings.Trim(string(guid[:]), "\n"))).Output()
+	env, err := exec.Command("cf", "curl", fmt.Sprintf("/v3/apps/%s/env", strings.Trim(string(guid), "\n"))).Output()
 	if err != nil {
 		return nil, err
 	}
@@ -112,20 +117,22 @@ func checkUserPathAvailability(app string, path string) (bool, error) {
 		return false, err
 	}
 
-	if strings.Contains(string(output[:]), "exists and read-writeable") {
+	if strings.Contains(string(output), "exists and read-writeable") {
 		return true, nil
 	}
 
 	return false, nil
 }
 
+// FindReasonForAccessError determines the reason why accessing a Cloud Foundry app failed,
+// providing helpful diagnostic information and suggestions.
 func FindReasonForAccessError(app string) string {
 	out, err := exec.Command("cf", "apps").Output()
 	if err != nil {
 		return "cf is not logged in, please login and try again"
 	}
 	// Find all app names
-	lines := strings.Split(string(out[:]), "\n")
+	lines := strings.Split(string(out), "\n")
 	appNames := []string{}
 	foundHeader := false
 	for _, line := range lines {
@@ -145,6 +152,8 @@ func FindReasonForAccessError(app string) string {
 	return "Could not find " + app + ". Did you mean " + matches[0] + "?"
 }
 
+// CheckRequiredTools verifies that the necessary tools and permissions are available
+// for the specified Cloud Foundry application, including SSH access.
 func CheckRequiredTools(app string) (bool, error) {
 	guid, err := exec.Command("cf", "app", app, "--guid").Output()
 	if err != nil {
@@ -155,7 +164,7 @@ func CheckRequiredTools(app string) (bool, error) {
 		return false, err
 	}
 	var result map[string]any
-	if err := json.Unmarshal([]byte(output), &result); err != nil {
+	if err := json.Unmarshal(output, &result); err != nil {
 		return false, err
 	}
 
@@ -166,6 +175,8 @@ func CheckRequiredTools(app string) (bool, error) {
 	return true, nil
 }
 
+// GetAvailablePath determines the best available path for operations on the Cloud Foundry app,
+// preferring user-specified paths and falling back to volume mounts or /tmp.
 func GetAvailablePath(data string, userpath string) (string, error) {
 	if len(userpath) > 0 {
 		valid, _ := checkUserPathAvailability(data, userpath)
@@ -178,7 +189,7 @@ func GetAvailablePath(data string, userpath string) (string, error) {
 
 	env, err := readAppEnv(data)
 	if err != nil {
-		return "/tmp", nil
+		return "/tmp", err
 	}
 
 	var cfAppEnv CFAppEnv
@@ -197,12 +208,18 @@ func GetAvailablePath(data string, userpath string) (string, error) {
 	return "/tmp", nil
 }
 
+// CopyOverCat copies a remote file to a local destination using the cf ssh command and cat.
 func CopyOverCat(args []string, src string, dest string) error {
-	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
+	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return errors.New("Error creating local file at  " + dest + ". Please check that you are allowed to create files at the given local path.")
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			// Log the error, but don't override the main function's error
+			fmt.Fprintf(os.Stderr, "Warning: failed to close file %s: %v\n", dest, closeErr)
+		}
+	}()
 
 	args = append(args, "cat "+src)
 	cat := exec.Command("cf", args...)
@@ -222,6 +239,7 @@ func CopyOverCat(args []string, src string, dest string) error {
 	return nil
 }
 
+// DeleteRemoteFile removes a file from the remote Cloud Foundry application container.
 func DeleteRemoteFile(args []string, path string) error {
 	args = append(args, "rm -fr "+path)
 	_, err := exec.Command("cf", args...).Output()
@@ -232,14 +250,18 @@ func DeleteRemoteFile(args []string, path string) error {
 	return nil
 }
 
+// FindHeapDumpFile locates heap dump files (*.hprof) in the specified path on the remote container.
 func FindHeapDumpFile(args []string, fullpath string, fspath string) (string, error) {
 	return FindFile(args, fullpath, fspath, "*.hprof")
 }
 
+// FindJFRFile locates Java Flight Recorder files (*.jfr) in the specified path on the remote container.
 func FindJFRFile(args []string, fullpath string, fspath string) (string, error) {
 	return FindFile(args, fullpath, fspath, "*.jfr")
 }
 
+// FindFile searches for files matching the given pattern in the remote container,
+// returning the most recently modified file that matches.
 func FindFile(args []string, fullpath string, fspath string, pattern string) (string, error) {
 	cmd := " [ -f '" + fullpath + "' ] && echo '" + fullpath + "' ||  find " + fspath + " -name '" + pattern + "' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1 "
 
@@ -256,17 +278,18 @@ func FindFile(args []string, fullpath string, fspath string, pattern string) (st
 		return "", errors.New("error while checking the generated file: " + errorStr)
 	}
 
-	return strings.Trim(string(output[:]), "\n"), nil
+	return strings.Trim(string(output), "\n"), nil
 }
 
+// ListFiles retrieves a list of files in the specified directory on the remote container.
 func ListFiles(args []string, path string) ([]string, error) {
 	cmd := "ls " + path
 	args = append(args, cmd)
 	output, err := exec.Command("cf", args...).Output()
 	if err != nil {
-		return nil, errors.New("error occurred while listing files: " + string(output[:]))
+		return nil, errors.New("error occurred while listing files: " + string(output))
 	}
-	files := strings.Split(strings.Trim(string(output[:]), "\n"), "\n")
+	files := strings.Split(strings.Trim(string(output), "\n"), "\n")
 	// Filter all empty strings
 	j := 0
 	for _, s := range files {
@@ -278,9 +301,9 @@ func ListFiles(args []string, path string) ([]string, error) {
 	return files[:j], nil
 }
 
-// FuzzySearch returns up to `max` words from `words` that are closest in
+// FuzzySearch returns up to `maxResults` words from `words` that are closest in
 // Levenshtein distance to `needle`.
-func FuzzySearch(needle string, words []string, max int) []string {
+func FuzzySearch(needle string, words []string, maxResults int) []string {
 	type match struct {
 		distance int
 		word     string
@@ -298,12 +321,12 @@ func FuzzySearch(needle string, words []string, max int) []string {
 		return matches[i].distance < matches[j].distance
 	})
 
-	if max > len(matches) {
-		max = len(matches)
+	if maxResults > len(matches) {
+		maxResults = len(matches)
 	}
 
-	results := make([]string, 0, max)
-	for i := range max {
+	results := make([]string, 0, maxResults)
+	for i := range maxResults {
 		results = append(results, matches[i].word)
 	}
 

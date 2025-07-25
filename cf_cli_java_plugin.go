@@ -803,8 +803,9 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 		return "cf " + strings.Join(cfSSHArguments, " "), nil
 	}
 
-	fullCommand := append(cfSSHArguments, remoteCommand)
-	c.logVerbose("Executing command: %v", cfSSHArguments)
+	fullCommand := append([]string{}, cfSSHArguments...)
+	fullCommand = append(fullCommand, remoteCommand)
+	c.logVerbose("Executing command: %v", fullCommand)
 
 	output, err := cliConnection.CliCommand(fullCommand...)
 	if err != nil {

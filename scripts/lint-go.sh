@@ -48,11 +48,17 @@ case "$MODE" in
         
         echo "🔍 Running gofumpt..."
         if command -v gofumpt >/dev/null 2>&1; then
-            if ! gofumpt -l -w *.go cmd/ utils/; then
-                print_error "Go formatting issues found with gofumpt"
-                exit 1
+            # Get only Git-tracked Go files
+            GO_FILES=$(git ls-files '*.go')
+            if [ -n "$GO_FILES" ]; then
+                if ! echo "$GO_FILES" | xargs gofumpt -l -w; then
+                    print_error "Go formatting issues found with gofumpt"
+                    exit 1
+                fi
+                print_status "gofumpt formatting check passed on Git-tracked files"
+            else
+                print_warning "No Git-tracked Go files found"
             fi
-            print_status "gofumpt formatting check passed"
         else
             echo "🔍 Running go fmt..."
             if ! go fmt ./...; then
@@ -70,6 +76,17 @@ case "$MODE" in
         fi
         print_status "Go vet check passed"
         
+        echo "🔍 Running golangci-lint..."
+        if command -v golangci-lint >/dev/null 2>&1; then
+            if (! golangci-lint run --timeout=3m *.go || ! golangci-lint run utils/*.go); then
+                print_error "golangci-lint issues found"
+                exit 1
+            fi
+        else
+            print_warning "golangci-lint not found, skipping comprehensive linting"
+            print_info "Install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"
+        fi
+    
         print_status "All Go linting checks passed!"
         ;;
         
