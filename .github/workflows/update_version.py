@@ -58,13 +58,14 @@ def process_readme_changelog(readme_path, version):
 
     # Remove the "-snapshot" from the header
     new_header = f"## {version}"
-    updated_content = re.sub(snapshot_pattern, new_header + '\n\n', content)
+    updated_content = re.sub(snapshot_pattern, "## Snapshot\n\n\n" + new_header + '\n\n', content)
 
     # Write the updated README
     with open(readme_path, 'w') as f:
         f.write(updated_content)
 
     print(f"✅ Updated README.md: converted '## Snapshot' to '## {version}'")
+
     return True, section_content
 
 def get_base_version(version):
