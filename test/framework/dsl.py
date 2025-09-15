@@ -5,12 +5,36 @@ Provides a clean, readable interface for test assertions.
 
 import glob
 import re
+import time
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from .core import CFJavaTestRunner, CommandResult, TestContext
 
 if TYPE_CHECKING:
     from .file_validators import FileType
+
+
+def is_ssh_auth_error(output: str) -> tuple[bool, Optional[str]]:
+    """
+    Check if the given output contains SSH authentication errors.
+
+    Returns:
+        tuple: (is_auth_error: bool, detected_error: Optional[str])
+    """
+    ssh_auth_errors = [
+        "Error getting one time auth code: Error getting SSH code: Error requesting one time code from server:",
+        "Error getting one time auth code",
+        "Error getting SSH code",
+        "Authentication failed",
+        "SSH authentication failed",
+        "Error opening SSH connection: ssh: handshake failed",
+    ]
+
+    for error_pattern in ssh_auth_errors:
+        if error_pattern in output:
+            return True, error_pattern
+
+    return False, None
 
 
 class FluentAssertion:
@@ -28,15 +52,70 @@ class FluentAssertion:
     def should_succeed(self) -> "FluentAssertion":
         """Assert that the command succeeded."""
         if self.result.failed:
-            # Check for SSH auth errors that should skip the test instead of failing
-            ssh_auth_error = (
-                "Error getting one time auth code: Error getting SSH code: Error requesting one time code from server:"
-            )
-
-            if ssh_auth_error in self.result.stderr or ssh_auth_error in self.result.stdout:
+            # Check for SSH auth errors that should trigger re-login and restart
+            output_to_check = self.result.stderr + " " + self.result.stdout
+            ssh_error_detected, detected_error = is_ssh_auth_error(output_to_check)
+            print("🔍 Checking for SSH auth errors in command output...")
+            print("output_to_check:", output_to_check)
+            print("ssh_error_detected:", ssh_error_detected)
+            if ssh_error_detected:
                 import pytest
 
-                pytest.skip(f"Test skipped due to SSH auth error (CF platform issue): {ssh_auth_error}")
+                print(f"🔄 SSH AUTH ERROR DETECTED: {detected_error}")
+                print("🔄 SSH AUTH ERROR DETECTED: Attempting re-login and app restart")
+
+                # Try to recover by re-logging in and restarting the app
+                try:
+                    # Force re-login by clearing login state
+                    from .core import CFManager
+
+                    CFManager.reset_global_login_state()
+
+                    time.sleep(5)
+
+                    # Re-login
+                    cf_manager = CFManager(self.runner.config)
+                    login_success = cf_manager.login()
+
+                    if login_success:
+                        print("✅ SSH AUTH RECOVERY: Successfully re-logged in")
+
+                        # Restart the app
+                        if hasattr(self.context, "app_name") and self.context.app_name:
+                            restart_success = cf_manager.restart_single_app(self.context.app_name)
+                            if restart_success:
+                                print(f"✅ SSH AUTH RECOVERY: Successfully restarted {self.context.app_name}")
+
+                                # Re-run the original command
+                                print(f"🔄 SSH AUTH RECOVERY: Retrying original command: {self.result.command}")
+                                retry_result = self.runner.run_command(
+                                    self.result.command, app_name=self.context.app_name
+                                )
+
+                                # Replace the result with the retry result
+                                self.result = retry_result
+
+                                # Check if retry succeeded
+                                if not retry_result.failed:
+                                    print("✅ SSH AUTH RECOVERY: Command succeeded after recovery")
+                                    return self
+                                else:
+                                    print(
+                                        "❌ SSH AUTH RECOVERY: Command still failed after recovery: "
+                                        f"{retry_result.stderr}"
+                                    )
+                            else:
+                                print(f"❌ SSH AUTH RECOVERY: Failed to restart {self.context.app_name}")
+                        else:
+                            print("❌ SSH AUTH RECOVERY: No app name available for restart")
+                    else:
+                        print("❌ SSH AUTH RECOVERY: Failed to re-login")
+
+                except Exception as e:
+                    print(f"❌ SSH AUTH RECOVERY: Exception during recovery: {e}")
+
+                # If we get here, recovery failed or retry failed, so skip the test
+                pytest.skip(f"Test skipped due to SSH auth error (CF platform issue): {detected_error}")
 
             raise AssertionError(
                 f"Expected command to succeed, but it failed with code {self.result.returncode}:\n"
