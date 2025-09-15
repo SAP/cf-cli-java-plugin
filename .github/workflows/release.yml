@@ -134,7 +134,7 @@ jobs:
         run: |
           source venv/bin/activate
           echo "📝 Generating plugin repository YAML file for version ${{ github.event.inputs.version }}..."
-          python3 .github/workflows/generate_plugin_repo.py
+          python3 .github/workflows/generate_plugin_repo.py "${{ github.event.inputs.version }}"
           echo "✅ Plugin repository YAML generated"
           echo ""
           echo "Generated files:"

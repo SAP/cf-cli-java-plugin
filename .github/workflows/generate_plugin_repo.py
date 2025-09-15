@@ -27,9 +27,8 @@ def get_version_from_tag():
         version = version[1:]  # Remove 'v' prefix
     return version or "dev"
 
-def generate_plugin_repo_yaml():
+def generate_plugin_repo_yaml(version: str):
     """Generate the plugin repository YAML file."""
-    version = get_version_from_tag()
     repo_url = "https://github.com/SAP/cf-cli-java-plugin"
     
     # Define the binary platforms and their corresponding file extensions
@@ -103,4 +102,8 @@ def generate_plugin_repo_yaml():
     print(f"Generated summary file: {summary_file}")
 
 if __name__ == "__main__":
-    generate_plugin_repo_yaml()
+    if len(sys.argv) != 2:
+        print("Usage: generate_plugin_repo.py <version>")
+        print("Example: generate_plugin_repo.py 4.1.0")
+        sys.exit(1)
+    generate_plugin_repo_yaml(sys.argv[1])
