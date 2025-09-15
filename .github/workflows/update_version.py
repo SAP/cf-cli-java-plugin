@@ -36,11 +36,11 @@ def process_readme_changelog(readme_path, version):
         content = f.read()
 
     # Look for the snapshot section
-    snapshot_pattern = rf'## {re.escape(version)}-snapshot\s*\n'
+    snapshot_pattern = rf'### Snapshot\s*\n'
     match = re.search(snapshot_pattern, content)
 
     if not match:
-        print(f"Error: README.md does not contain a '## {version}-snapshot' section")
+        print(f"Error: README.md does not contain a '### Snapshot' section")
         return False, None
 
     # Find the content of the snapshot section
@@ -64,7 +64,7 @@ def process_readme_changelog(readme_path, version):
     with open(readme_path, 'w') as f:
         f.write(updated_content)
 
-    print(f"✅ Updated README.md: converted '## {version}-snapshot' to '## {version}'")
+    print(f"✅ Updated README.md: converted '## Snapshot' to '## {version}'")
     return True, section_content
 
 def get_base_version(version):
