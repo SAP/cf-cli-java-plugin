@@ -5,7 +5,7 @@ applications:
   path: test.jar
   memory: 512M
   buildpacks: 
-  - sap_java_buildpack
+  - sap_java_buildpack_jakarta
   env:
     TARGET_RUNTIME: tomcat
     JBP_CONFIG_COMPONENTS: "jres: ['com.sap.xs.java.buildpack.jdk.SAPMachineJDK']"
