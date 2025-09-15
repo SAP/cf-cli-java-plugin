@@ -429,6 +429,8 @@ create GitHub issues for security-related doubts or problems.
 
 ## Changelog
 
+### Snapshot
+
 ### 4.0.1
 
 - Fix thread-dump command
