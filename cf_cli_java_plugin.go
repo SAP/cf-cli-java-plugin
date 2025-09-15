@@ -380,8 +380,8 @@ fi`,
 		GenerateFiles: false,
 		SSHCommand: `JSTACK_COMMAND=$(find -executable -name jstack | head -1);
 		JVMMON_COMMAND=$(find -executable -name jvmmon | head -1) 
-		if [ -z "${JMAP_COMMAND}" ] && [ -z "${JVMMON_COMMAND}" ]; then
-		echo >&2 "jvmmon or jmap are required for generating heap dump, you can modify your application manifest.yaml on the 'JBP_CONFIG_OPEN_JDK_JRE' environment variable. This could be done like this:
+		if [ -z "${JVMMON_COMMAND}" ] && [ -z "${JSTACK_COMMAND}" ]; then
+		echo >&2 "jstack or jvmmon are required for generating heap dump, you can modify your application manifest.yaml on the 'JBP_CONFIG_OPEN_JDK_JRE' environment variable. This could be done like this:
 				---
 				applications:
 				- name: <APP_NAME>
