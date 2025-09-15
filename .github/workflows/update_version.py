@@ -47,7 +47,7 @@ def process_readme_changelog(readme_path, version):
     start_pos = match.end()
 
     # Find the next ## section or end of file
-    next_section_pattern = r'\n## '
+    next_section_pattern = r'\n##(#?) '
     next_match = re.search(next_section_pattern, content[start_pos:])
 
     if next_match:
