@@ -275,12 +275,6 @@ USAGE:
         Get the status of async-profiler on a running Java application
 
 OPTIONS:
-   -args                     -a, Miscellaneous arguments to pass to the command (if supported) in the
-                               container, be aware to end it with a space if it is a simple option. For
-                               commands that create arbitrary files (jcmd, asprof), the environment
-                               variables @FSPATH, @ARGS, @APP_NAME, @FILE_NAME, and @STATIC_FILE_NAME are
-                               available in --args to reference the working directory path, arguments,
-                               application name, and generated file name respectively.
    -container-dir            -cd, the directory path in the container that the heap dump/JFR/... file will be
                                 saved to
    -dry-run                  -n, just output to command line what would be executed
@@ -292,6 +286,12 @@ OPTIONS:
                                 container, implies '--keep'
    -verbose                  -v, enable verbose output for the plugin
    -app-instance-index       -i [index], select to which instance of the app to connect
+   -args                     -a, Miscellaneous arguments to pass to the command (if supported) in the
+                               container, be aware to end it with a space if it is a simple option. For
+                               commands that create arbitrary files (jcmd, asprof), the environment
+                               variables @FSPATH, @ARGS, @APP_NAME, @FILE_NAME, and @STATIC_FILE_NAME are
+                               available in --args to reference the working directory path, arguments,
+                               application name, and generated file name respectively.
 
 </pre>
 
@@ -429,7 +429,7 @@ create GitHub issues for security-related doubts or problems.
 
 ## Changelog
 
-### 4.0.1-snapshot
+### Snapshot
 
 - Fix thread-dump command
 
