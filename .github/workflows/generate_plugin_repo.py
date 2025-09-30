@@ -20,13 +20,6 @@ def calculate_sha1(file_path):
             sha1_hash.update(chunk)
     return sha1_hash.hexdigest()
 
-def get_version_from_tag():
-    """Get version from git tag or environment variable."""
-    version = os.environ.get('GITHUB_REF_NAME', '')
-    if version.startswith('v'):
-        version = version[1:]  # Remove 'v' prefix
-    return version or "dev"
-
 def generate_plugin_repo_yaml(version: str):
     """Generate the plugin repository YAML file."""
     repo_url = "https://github.com/SAP/cf-cli-java-plugin"

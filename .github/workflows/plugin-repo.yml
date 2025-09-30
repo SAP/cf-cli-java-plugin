@@ -34,7 +34,7 @@ jobs:
       - name: Generate plugin repository YAML
         env:
           GITHUB_REF_NAME: ${{ github.event.release.tag_name }}
-        run: python3 .github/workflows/generate_plugin_repo.py
+        run: python3 .github/workflows/generate_plugin_repo.py $GITHUB_REF_NAME
 
       - name: Upload plugin repository files to release
         env:
