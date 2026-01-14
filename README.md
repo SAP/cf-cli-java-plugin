@@ -431,6 +431,10 @@ create GitHub issues for security-related doubts or problems.
 
 ### Snapshot
 
+- Don't use CliConnection at all, just call `cf ssh` directly
+
+### 4.0.1
+
 - Fix thread-dump command
 
 ### 4.0.0

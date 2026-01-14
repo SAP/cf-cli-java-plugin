@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -253,7 +254,7 @@ func (c *JavaPlugin) DoRun(cliConnection plugin.CliConnection, args []string) (s
 		if errors.As(err, &invalidUsageErr) {
 			fmt.Println()
 			fmt.Println()
-			_, err := cliConnection.CliCommand("help", "java")
+			err := exec.Command("cf", "help", "java").Run()
 			if err != nil {
 				ui.Failed("Failed to show help")
 			}
@@ -596,7 +597,7 @@ fi`,
 	},
 }
 
-func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) (string, error) {
+func (c *JavaPlugin) execute(_ plugin.CliConnection, args []string) (string, error) {
 	if len(args) == 0 {
 		return "", &InvalidUsageError{message: "No command provided"}
 	}
@@ -807,7 +808,11 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 	fullCommand = append(fullCommand, remoteCommand)
 	c.logVerbosef("Executing command: %v", fullCommand)
 
-	output, err := cliConnection.CliCommand(fullCommand...)
+	cmdArgs := append([]string{"cf"}, fullCommand...)
+	c.logVerbosef("Executing command: %v", cmdArgs)
+	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+	outputBytes, err := cmd.CombinedOutput()
+	output := string(outputBytes)
 	if err != nil {
 		if err.Error() == "unexpected EOF" {
 			return "", fmt.Errorf("Command failed")
@@ -815,7 +820,11 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 		if len(output) == 0 {
 			return "", fmt.Errorf("Command execution failed: %w", err)
 		}
-		return "", fmt.Errorf("Command execution failed: %w\nOutput: %s", err, strings.Join(output, "\n"))
+		return "", fmt.Errorf("Command execution failed: %w\nOutput: %s", err, output)
+	}
+	// Print output to stdout for user visibility
+	if len(output) > 0 {
+		fmt.Print(output)
 	}
 
 	if command.GenerateFiles {
@@ -845,7 +854,7 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 
 		if noDownload {
 			fmt.Println("No download requested, skipping file download")
-			return strings.Join(output, "\n"), nil
+			return output, nil
 		}
 
 		localFileFullPath := localDir + "/" + applicationName + "-" + command.FileNamePart + "-" + utils.GenerateUUID() + command.FileExtension
@@ -917,7 +926,7 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 	}
 	// We keep this around to make the compiler happy, but commandExecutor.Execute will cause an os.Exit
 	c.logVerbosef("Command execution completed successfully")
-	return strings.Join(output, "\n"), err
+	return output, err
 }
 
 // GetMetadata must be implemented as part of the plugin interface
