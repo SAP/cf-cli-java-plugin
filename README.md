@@ -431,6 +431,8 @@ create GitHub issues for security-related doubts or problems.
 
 ### Snapshot
 
+### 4.0.2
+
 - Don't use CliConnection at all, just call `cf ssh` directly
 
 ### 4.0.1

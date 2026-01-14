@@ -812,7 +812,7 @@ func (c *JavaPlugin) execute(_ plugin.CliConnection, args []string) (string, err
 	c.logVerbosef("Executing command: %v", cmdArgs)
 	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 	outputBytes, err := cmd.CombinedOutput()
-	output := string(outputBytes)
+	output := strings.TrimRight(string(outputBytes), "\n")
 	if err != nil {
 		if err.Error() == "unexpected EOF" {
 			return "", fmt.Errorf("Command failed")
@@ -963,7 +963,7 @@ func (c *JavaPlugin) GetMetadata() plugin.PluginMetadata {
 		Version: plugin.VersionType{
 			Major: 4,
 			Minor: 0,
-			Build: 1,
+			Build: 2,
 		},
 		MinCliVersion: plugin.VersionType{
 			Major: 4,
