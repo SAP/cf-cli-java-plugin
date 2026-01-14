@@ -822,10 +822,6 @@ func (c *JavaPlugin) execute(_ plugin.CliConnection, args []string) (string, err
 		}
 		return "", fmt.Errorf("Command execution failed: %w\nOutput: %s", err, output)
 	}
-	// Print output to stdout for user visibility
-	if len(output) > 0 {
-		fmt.Print(output)
-	}
 
 	if command.GenerateFiles {
 		c.logVerbosef("Processing file generation and download")
