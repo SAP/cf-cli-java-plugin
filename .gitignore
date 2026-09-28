@@ -32,7 +32,10 @@ pkg/
 
 # built project binary (go build)
 cf-java-plugin
+cf-cli-java-plugin
 
+# Local tool binaries (downloaded during development, e.g. gofumpt, gopls)
+bin/
 # Testing directory - sensitive config and test results
 test/test_config.yml
 test/*.hprof
@@ -70,6 +73,7 @@ requires
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+venv/
 
 # Local investigation / scratch artifacts
 BUG*.md
