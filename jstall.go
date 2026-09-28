@@ -170,6 +170,43 @@ func formatCommandForDisplay(command string, args []string) string {
 	return command + " " + strings.Join(displayArgs, " ")
 }
 
+// jstallWindowsQuotingFix is a JVM system property that fixes `cf java status`/`jstall` on Windows.
+// jstall sends its remote shell snippets to the app container by running
+// `ProcessBuilder("cf", "ssh", APP, "-c", payload)`. The payload contains embedded double quotes
+// (e.g. `if [ -n "$JAVA_HOME" ] ...; jcmd "123" "Thread.print"`). With the JDK default
+// (jdk.lang.Process.allowAmbiguousCommands=true -> VERIFICATION_WIN32), Java wraps such an argument
+// in quotes WITHOUT escaping the embedded quotes, so cf.exe's Windows argv parser shreds it into
+// many broken tokens (quotes lost, payload split at spaces) and the command fails.
+// Setting allowAmbiguousCommands=false switches Java to VERIFICATION_WIN32_SAFE, which escapes
+// embedded quotes with backslashes, and the payload arrives at cf.exe exactly as jstall built it.
+// The property only affects process creation on Windows; it is inert on other platforms.
+const jstallWindowsQuotingFix = "-Djdk.lang.Process.allowAmbiguousCommands=false"
+
+// buildJstallArgs assembles the arguments for the jstall JVM invocation (without the java binary).
+func buildJstallArgs(jarPath, appName, jstallArgs string, appInstanceIndex int) ([]string, error) {
+	args := []string{jstallWindowsQuotingFix, "-jar", jarPath}
+
+	// Use --cf which jstall translates to "cf ssh <app> -c" internally via ProcessBuilder
+	// (no sh -c wrapper since v0.7.2). For instance index, fall back to --ssh
+	// since --cf doesn't support it. See jstallWindowsQuotingFix for why remote
+	// execution additionally needs the system property set above on Windows.
+	if appInstanceIndex != -1 {
+		sshCmd := "cf ssh " + appName + " --app-instance-index " + strconv.Itoa(appInstanceIndex) + " -c"
+		args = append(args, "--ssh", sshCmd)
+	} else {
+		args = append(args, "--cf", appName)
+	}
+
+	if jstallArgs != "" {
+		splitArgs, err := shlex.Split(jstallArgs)
+		if err != nil {
+			return nil, fmt.Errorf("invalid jstall arguments: %w", err)
+		}
+		args = append(args, splitArgs...)
+	}
+	return args, nil
+}
+
 func (c *JavaPlugin) executeJstall(appName string, jstallArgs string, appInstanceIndex int, dryRun bool) (string, error) {
 	javaPath, err := findJava17Plus()
 	if err != nil {
@@ -183,24 +220,9 @@ func (c *JavaPlugin) executeJstall(appName string, jstallArgs string, appInstanc
 	}
 	c.logVerbosef("JStall JAR at: %s", jarPath)
 
-	args := []string{"-jar", jarPath}
-
-	// Use --cf which jstall translates to "cf ssh <app> -c" internally via ProcessBuilder
-	// (no sh -c wrapper since v0.7.2, so this works on Windows too).
-	// For instance index, fall back to --ssh since --cf doesn't support it.
-	if appInstanceIndex != -1 {
-		sshCmd := "cf ssh " + appName + " --app-instance-index " + strconv.Itoa(appInstanceIndex) + " -c"
-		args = append(args, "--ssh", sshCmd)
-	} else {
-		args = append(args, "--cf", appName)
-	}
-
-	if jstallArgs != "" {
-		splitArgs, err := shlex.Split(jstallArgs)
-		if err != nil {
-			return "", fmt.Errorf("invalid jstall arguments: %w", err)
-		}
-		args = append(args, splitArgs...)
+	args, err := buildJstallArgs(jarPath, appName, jstallArgs, appInstanceIndex)
+	if err != nil {
+		return "", err
 	}
 
 	displayCmd := formatCommandForDisplay(javaPath, args)

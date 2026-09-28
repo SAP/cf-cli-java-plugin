@@ -65,5 +65,6 @@ for archive_name, member, dest, is_zip in hprof_targets:
 if "--deps-only" in sys.argv:
     sys.exit(0)
 
-rc = subprocess.call(f"go build -o dist/cf-cli-java-plugin-{os_name}-{arch}", shell=True)
+exe = ".exe" if os_name == "windows" else ""
+rc = subprocess.call(f"go build -o dist/cf-cli-java-plugin-{os_name}-{arch}{exe}", shell=True)
 sys.exit(rc)

@@ -50,7 +50,7 @@ To install a new version of the plugin, run the following:
 # on Mac arm64 (Apple Silicon only)
 cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/latest/download/cf-cli-java-plugin-macos-arm64
 # on Windows amd64
-cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/latest/download/cf-cli-java-plugin-windows-amd64
+cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/latest/download/cf-cli-java-plugin-windows-amd64.exe
 # on Linux amd64
 cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/latest/download/cf-cli-java-plugin-linux-amd64
 # on Linux arm64
@@ -72,7 +72,7 @@ To install a new version of the plugin, run the following:
 # on Mac arm64 (Apple Silicon only)
 cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-macos-arm64
 # on Windows amd64
-cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-windows-amd64
+cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-windows-amd64.exe
 # on Linux amd64
 cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-linux-amd64
 # on Linux arm64

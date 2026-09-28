@@ -170,6 +170,11 @@ jobs:
         shell: bash
         run: |
           plugin_bin=$(ls dist/cf-cli-java-plugin-windows-* | head -1)
+          # The binary must have a .exe extension; cf install-plugin rejects files without it.
+          if [[ "$plugin_bin" != *.exe ]]; then
+            echo "FAIL: Windows plugin binary missing .exe extension: $plugin_bin"
+            exit 1
+          fi
           cf install-plugin "$plugin_bin" -f
 
           # Run cf java status — not logged in so CF will respond with an auth
