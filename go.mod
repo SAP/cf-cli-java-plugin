@@ -1,6 +1,6 @@
 module cf.plugin.ref/requires
 
-go 1.26.0
+go 1.26.8
 
 require (
 	code.cloudfoundry.org/cli v0.0.0-20250623142502-fb19e7a825ee
