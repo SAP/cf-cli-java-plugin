@@ -901,7 +901,7 @@ fi`,
 	},
 }
 
-func (c *JavaPlugin) execute(_ plugin.CliConnection, args []string) (string, error) {
+func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) (string, error) {
 	if len(args) == 0 {
 		return "", &InvalidUsageError{message: "No command provided"}
 	}
@@ -986,6 +986,19 @@ func (c *JavaPlugin) execute(_ plugin.CliConnection, args []string) (string, err
 		avCommands := make([]string, 0, len(commands))
 		for _, command := range commands {
 			avCommands = append(avCommands, command.Name)
+		}
+		// Detect swapped order: cf java MY-APP heap-dump instead of cf java heap-dump MY-APP
+		if argumentLen >= 2 && cliConnection != nil {
+			secondArg := strings.ToLower(arguments[1])
+			for _, cmd := range commands {
+				if cmd.Name == secondArg {
+					// Confirm the first arg looks like an app name
+					if _, appErr := cliConnection.GetApp(commandName); appErr == nil {
+						return "", &InvalidUsageError{message: fmt.Sprintf("Did you mean: cf java %s %s? (app and command appear to be swapped)", secondArg, commandName)}
+					}
+					break
+				}
+			}
 		}
 		matches := utils.FuzzySearch(lowerCommandName, avCommands, 3)
 		return "", &InvalidUsageError{message: fmt.Sprintf("Unrecognized command %q, did you mean: %s?", commandName, utils.JoinWithOr(matches))}
