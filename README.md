@@ -147,43 +147,60 @@ hprof-analyzer $APP_NAME-heapdump-*.hprof report.html
 # Open report.html → "Leak Suspects" and "Top Consumers" tabs
 ```
 
-**Note:** requires jmap — see [Prerequisites](#prerequisites) if you see a "jmap not found" error.
+**Note:** On JRE-only containers without `jmap`, heap dumps are taken via the HotSpot attach socket — see [JRE-only containers](#jre-only-containers) below.
 
 ## Usage
 
 ### Prerequisites
 
-#### JDK Tools (for `heap-dump` only)
+#### Container Requirements
 
-The `heap-dump` command uses `jmap`, which is not shipped by default in the
-[Cloud Foundry Java Buildpack](https://github.com/cloudfoundry/java-buildpack). Other commands (`thread-dump`, `jcmd`,
-`jfr-*`, `asprof-*`, `status`, `jstall`, `record-status`) use `jcmd` or `asprof`, which are available in SapMachine and
-most JDK distributions without extra configuration.
+Most commands work out of the box on any Java container. The table below shows what each command needs:
 
-To ensure that `jmap` is available for heap dumps, you can request a full JDK in your application manifest via the
-`JBP_CONFIG_OPEN_JDK_JRE` environment variable. This could be done like this:
+| Command | JDK tools needed | JRE-only fallback |
+|---|---|---|
+| `heap-dump` | `jmap` (or `jvmmon` on SapMachine) | `nc -U` (netcat-openbsd / nmap-ncat) |
+| `thread-dump` | `jstack` (or `jvmmon` on SapMachine) | `nc -U` |
+| `vm-info`, `vm-version` | `jcmd` | `nc -U` |
+| `jcmd` | `jcmd` | `nc -U` |
+| `jfr-*` | `jcmd` | — (JFR requires JDK) |
+| `asprof-*` | `asprof` (SapMachine / manual install) | — |
+| `status`, `jstall`, `record-status` | none (runs locally via jstall) | works on any JRE |
+
+#### JRE-only containers
+
+The Cloud Foundry Java Buildpack deploys a JRE by default (no `jmap`, `jstack`, or `jcmd`). Most `cf java` commands
+now work on JRE-only containers via the HotSpot attach socket: the plugin sends jcmd-protocol requests directly to
+the JVM over a Unix-domain socket using `nc`.
+
+**Requirement:** `netcat-openbsd` or `nmap-ncat` must be installed in the container (provides `nc` with `-U` support).
+Most Debian/Ubuntu-based containers include `netcat-openbsd` by default. If it is missing, install it via:
+
+```yaml
+env:
+  VCAP_SERVICES_PACKAGE_INSTALL: "netcat-openbsd"
+```
+
+Or in your Dockerfile/buildpack configuration: `apt-get install -y netcat-openbsd`.
+
+Commands that require a full JDK and have no nc fallback are `jfr-*` (JFR is a JDK feature) and `asprof-*`
+(async-profiler must be installed separately). Use `jstall`-based commands for diagnostics on JRE-only containers.
+
+To use a full JDK instead (gives access to all commands), set `JBP_CONFIG_OPEN_JDK_JRE` in your manifest:
 
 ```yaml
 ---
 applications:
   - name: <APP_NAME>
-    memory: 1G
-    path: <PATH_TO_BUILD_ARTIFACT>
     buildpack: https://github.com/cloudfoundry/java-buildpack
     env:
       JBP_CONFIG_OPEN_JDK_JRE:
-        '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/jammy/x86_64", version: 11.+ } }'
-      JBP_CONFIG_JAVA_OPTS: "[java_opts: '-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints']"
+        ‘{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/jammy/x86_64", version: 21.+ } }’
+      JBP_CONFIG_JAVA_OPTS: "[java_opts: ‘-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints’]"
 ```
 
-`-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints` is used to improve profiling accuracy and has no known negative
-performance impacts.
-
-Please note that this requires the use of an online buildpack (configured in the `buildpack` property). When system
-buildpacks are used, staging will fail with cache issues, because the system buildpacks don’t have the JDK cached.
-Please also note that this is not to be considered a recommendation to use a full JDK. It's just one option to get the
-tools required for the use of this plugin when you need it, e.g., for troubleshooting. The `version` property is
-optional and can be used to request a specific Java version.
+Note: this requires an online buildpack (`buildpack` property), not a system buildpack (system buildpacks don’t
+cache JDK artifacts and will fail staging).
 
 #### SSH Access
 
@@ -414,7 +431,7 @@ dump is being downloaded. The binary is embedded from the
 
 When bandwidth or container disk space is a concern, use `--compress` to transfer the dump in gzip format.
 
-- On **JDK 17+**: `jmap` compresses the dump on the container before transfer; the local file is saved as `.hprof.gz`.
+- On **JDK 17+**: `jmap` (or the nc fallback) compresses the dump on the container before transfer; the local file is saved as `.hprof.gz`.
 - On **JDK < 17**: the container JDK does not support `gz=1`; a warning is printed and the dump is downloaded
   uncompressed as usual.
 
