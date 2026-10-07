@@ -1,0 +1,14 @@
+---
+applications:
+- name: jdk17
+  random-route: true
+  path: workload.jar
+  memory: 256M
+  health-check-type: http
+  health-check-http-endpoint: /health
+  buildpacks:
+  - https://github.com/cloudfoundry/java-buildpack.git
+  env:
+    JBP_CONFIG_COMPONENTS: '{jres: ["JavaBuildpack::Jre::OpenJdkJRE"]}'
+    JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/jammy/x86_64", version: 17.+ } }'
+    JBP_CONFIG_JAVA_OPTS: "[java_opts: '-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints']"
