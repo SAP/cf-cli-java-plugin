@@ -9,8 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
-- Bundle [jstall](https://github.com/parttimenerd/jstall) (jstall-minimal.jar) for one-shot JVM inspection via
-  `cf java jstall APP_NAME`. Requires Java 17+ locally. Supports all jstall subcommands via `--args`.
+- Bundle [jstall](https://github.com/parttimenerd/jstall) v0.8.1 (jstall-minimal.jar) for one-shot JVM
+  inspection via `cf java jstall APP_NAME`. Requires Java 17+ locally. Key subcommands: `status` (thread
+  analysis, metaspace, GC, compiler queue), `record-status` (repeated sampling), `flame-graph`, `heap-info`.
+  Supports all jstall subcommands via `--args`.
 - `heap-dump --redact`: zeros primitive arrays (`byte[]`, `char[]`, etc.) in the downloaded dump before saving
   (lean redaction mode), using the bundled [hprof-redact](https://github.com/parttimenerd/hprof-analyzer) binary.
   Supported on Linux (amd64, arm64), macOS (Apple Silicon), and Windows (amd64, arm64).
@@ -27,14 +29,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   automatically after the browser fetches it.
 - `heap-dump --open-url <URL>`: override the hprof-analyzer base URL (e.g. a locally running instance). Implies
   `--open`.
-- JRE-only container support: `heap-dump`, `thread-dump`, `vm-info`, `vm-version`, and `jcmd` now work on containers
-  without JDK tools (`jmap`, `jstack`, `jcmd`) by falling back to the HotSpot attach socket via `nc -U`.
-  Requires `netcat-openbsd` or `nmap-ncat` on the container. Supports JDK 9–25 on Linux and macOS.
+- JRE-only container support: `heap-dump`, `thread-dump`, `vm-info`, `vm-version`, and `jcmd` now work on
+  containers without JDK tools (`jmap`, `jstack`, `jcmd`) by falling back to the HotSpot attach socket via
+  `nc -U`. Requires `netcat-openbsd` or `nmap-ncat` on the container. Supports JDK 9–25 on Linux and macOS.
+  The `jstall`-based commands (`status`, `record-status`, etc.) use the same attach-socket path and also work
+  on JRE-only containers.
 
 ### Changed
 
 - macOS plugin support now requires Apple Silicon. macOS Intel (`darwin/amd64`) is not supported.
-- Improved SSH error messages for better clarity and debugging
+- SSH errors now include actionable diagnostics: connection reset/refused errors suggest retrying,
+  "instance does not exist" errors explain why (app stopped/scaled down), and permission errors
+  indicate SSH is disabled for the space.
 
 ### Fixed
 
