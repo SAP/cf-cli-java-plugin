@@ -33,7 +33,8 @@ public class WorkloadApp {
         workload.setDaemon(true);
         workload.start();
 
-        HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
+        int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
+        HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         // Register specific paths before the catch-all "/"
         server.createContext("/health",     ex -> handleHealth(ex));
         server.createContext("/activate",   ex -> handleActivate(ex));
@@ -43,7 +44,7 @@ public class WorkloadApp {
         server.createContext("/",           ex -> handleRoot(ex));
         server.setExecutor(Executors.newFixedThreadPool(20));
         server.start();
-        System.out.println("WorkloadApp listening on port 8080");
+        System.out.println("WorkloadApp listening on port " + port);
     }
 
     // ---------- calibration ----------
