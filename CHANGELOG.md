@@ -7,25 +7,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
-### Changed
-
-- macOS plugin support now requires Apple Silicon. macOS Intel (`darwin/amd64`) is not supported.
-- Improved SSH error messages for better clarity and debugging
-
-### Fixed
-
-- Windows: `cf install-plugin <URL>` now works — the Windows binary is released with the required `.exe` extension
-  (`cf-cli-java-plugin-windows-amd64.exe`). Previously, CF CLI rejected the downloaded temp file with
-  *"temp/...exe doesn't exist"*.
-- Windows: `jstall`-based commands (e.g. `cf java status`) now work correctly — the JVM system property
-  `jdk.lang.Process.allowAmbiguousCommands=false` is set so embedded quotes in the remote shell payload are
-  properly escaped when CF CLI is invoked via Java's `ProcessBuilder`.
-- Better error when app name and subcommand are accidentally swapped (e.g. `cf java my-app heap-dump` instead
-  of `cf java heap-dump my-app`): if the first argument matches a known app in the current space, the error now
-  suggests the corrected command.
-- Bumped Go toolchain to 1.26.8 to resolve six standard-library vulnerabilities
-  (GO-2026-5856, GO-2026-5972, GO-2026-5039, GO-2026-5037, GO-2026-6089, GO-2026-6090).
-
 ### Added
 
 - Bundle [jstall](https://github.com/parttimenerd/jstall) (jstall-minimal.jar) for one-shot JVM inspection via
@@ -46,6 +27,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   automatically after the browser fetches it.
 - `heap-dump --open-url <URL>`: override the hprof-analyzer base URL (e.g. a locally running instance). Implies
   `--open`.
+- JRE-only container support: `heap-dump`, `thread-dump`, `vm-info`, `vm-version`, and `jcmd` now work on containers
+  without JDK tools (`jmap`, `jstack`, `jcmd`) by falling back to the HotSpot attach socket via `nc -U`.
+  Requires `netcat-openbsd` or `nmap-ncat` on the container. Supports JDK 9–25 on Linux and macOS.
+
+### Changed
+
+- macOS plugin support now requires Apple Silicon. macOS Intel (`darwin/amd64`) is not supported.
+- Improved SSH error messages for better clarity and debugging
+
+### Fixed
+
+- Windows: `cf install-plugin <URL>` now works — the Windows binary is released with the required `.exe` extension
+  (`cf-cli-java-plugin-windows-amd64.exe`). Previously, CF CLI rejected the downloaded temp file with
+  *"temp/...exe doesn't exist"*.
+- Windows: `jstall`-based commands (e.g. `cf java status`) now work correctly — the JVM system property
+  `jdk.lang.Process.allowAmbiguousCommands=false` is set so embedded quotes in the remote shell payload are
+  properly escaped when CF CLI is invoked via Java's `ProcessBuilder`.
+- Better error when app name and subcommand are accidentally swapped (e.g. `cf java my-app heap-dump` instead
+  of `cf java heap-dump my-app`): if the first argument matches a known app in the current space, the error now
+  suggests the corrected command.
+- Bumped Go toolchain to 1.26.8 to resolve six standard-library vulnerabilities
+  (GO-2026-5856, GO-2026-5972, GO-2026-5039, GO-2026-5037, GO-2026-6089, GO-2026-6090).
 
 ## [4.0.2]
 
