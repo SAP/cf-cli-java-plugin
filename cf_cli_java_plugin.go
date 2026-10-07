@@ -498,8 +498,12 @@ const (
   fi
   [ -z "$_sock" ] && { echo >&2 "nc_jcmd: attach socket not found for PID ${_pid}"; return 1; }
   _raw=$(printf '1\0jcmd\0%s\0%s\0%s\0' "$_cmd" "$_arg1" "$_arg2" | nc -w 2 -U "$_sock" 2>/dev/null)
-  echo "$_raw" | tail -n +2
-};`
+  _rc=$(echo "$_raw" | head -n 1)
+  _body=$(echo "$_raw" | tail -n +2)
+  if [ "$_rc" != "0" ]; then echo >&2 "nc_jcmd: command '$_cmd' failed (rc=$_rc): $_body"; return 1; fi
+  echo "$_body"
+};
+nc_available() { command -v nc >/dev/null 2>&1 && nc -h 2>&1 | grep -q '\-U'; };`
 )
 
 // Run must be implemented by any plugin because it is part of the
@@ -644,40 +648,36 @@ var commands = []Command{
 
 			OpenJDK: Wrap everything in an if statement in case jmap is available
 		*/
-		SSHCommand: `if [ -f @FILE_NAME ]; then echo >&2 'Heap dump @FILE_NAME already exists'; exit 1; fi
+		SSHCommand: AttachSocketNCHelper + `if [ -f @FILE_NAME ]; then echo >&2 'Heap dump @FILE_NAME already exists'; exit 1; fi
 JMAP_COMMAND=$(find -executable -name jmap | head -1 | tr -d [:space:])
 # SAP JVM: Wrap everything in an if statement in case jvmmon is available
 JVMMON_COMMAND=$(find -executable -name jvmmon | head -1 | tr -d [:space:])
-# if we have neither jmap nor jvmmon, we cannot generate a heap dump and should exit with an error
-if [ -z "${JMAP_COMMAND}" ] && [ -z "${JVMMON_COMMAND}" ]; then
-  echo >&2 "jvmmon or jmap are required for generating heap dump, you can modify your application manifest.yaml on the 'JBP_CONFIG_OPEN_JDK_JRE' environment variable. This could be done like this:
-		---
-		applications:
-		- name: <APP_NAME>
-		  memory: 1G
-		  path: <PATH_TO_BUILD_ARTIFACT>
-		  buildpack: https://github.com/cloudfoundry/java-buildpack
-		  env:
-			JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/jammy/x86_64", version: 21.+ } }'
-
-	"
-  exit 1
-fi
+_pid=$(pidof java)
 if [ -n "${JMAP_COMMAND}" ]; then
 GZ_ARG=""
 if ${JMAP_COMMAND} -h 2>&1 | grep -q "gz="; then GZ_ARG=",gz=1"; fi
-OUTPUT=$( ${JMAP_COMMAND} -dump:format=b${GZ_ARG},file=@FILE_NAME $(pidof java) ) || STATUS_CODE=$?
+OUTPUT=$( ${JMAP_COMMAND} -dump:format=b${GZ_ARG},file=@FILE_NAME ${_pid} ) || STATUS_CODE=$?
 if [ ! -s @FILE_NAME ]; then echo >&2 ${OUTPUT}; exit 1; fi
 if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi
 elif [ -n "${JVMMON_COMMAND}" ]; then
 echo -e 'change command line flag flags=-XX:HeapDumpOnDemandPath=@FSPATH\ndump heap' > setHeapDumpOnDemandPath.sh
-OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -cmd "setHeapDumpOnDemandPath.sh" ) || STATUS_CODE=$?
+OUTPUT=$( ${JVMMON_COMMAND} -pid ${_pid} -cmd "setHeapDumpOnDemandPath.sh" ) || STATUS_CODE=$?
 sleep 5 # Writing the heap dump is triggered asynchronously -> give the JVM some time to create the file
 HEAP_DUMP_NAME=$(find @FSPATH -name 'java_pid*.hprof' -printf '%T@ %p\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\0' '\n' | head -n 1)
 SIZE=-1; OLD_SIZE=$(stat -c '%s' "${HEAP_DUMP_NAME}"); while [ ${SIZE} != ${OLD_SIZE} ]; do OLD_SIZE=${SIZE}; sleep 3; SIZE=$(stat -c '%s' "${HEAP_DUMP_NAME}"); done
 if [ ! -s "${HEAP_DUMP_NAME}" ]; then echo >&2 ${OUTPUT}; exit 1; fi
 if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi
 if [ -n "@COMPRESS_FLAG" ]; then gzip -1 "${HEAP_DUMP_NAME}" && HEAP_DUMP_NAME="${HEAP_DUMP_NAME}.gz"; fi
+elif nc_available; then
+nc_jcmd ${_pid} GC.heap_dump @FILE_NAME || exit 1
+if [ ! -s @FILE_NAME ]; then echo >&2 "Heap dump file not created or empty"; exit 1; fi
+else
+  echo >&2 "jvmmon, jmap, or nc (netcat-openbsd / nmap-ncat) are required for generating a heap dump.
+To use a JDK image, set JBP_CONFIG_OPEN_JDK_JRE in your manifest.yaml:
+  env:
+    JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: \"https://java-buildpack.cloudfoundry.org/openjdk-jdk/jammy/x86_64\", version: 21.+ } }'
+Or install netcat on the container (apt-get install netcat-openbsd)."
+  exit 1
 fi`,
 		FileLabel:    "heap dump",
 		FileNamePart: "heapdump",
@@ -714,11 +714,19 @@ echo >&2 "jcmd not found. Install netcat (netcat-openbsd / nmap-ncat) for JRE-on
 	{
 		Name:                             toolJcmd,
 		Description:                      "Run a JCMD command on a running Java application via --args, downloads and deletes all files that are created in the current folder, use '--no-download' to prevent this. Environment variables available: @FSPATH (writable directory path, always set), @ARGS (command arguments), @APP_NAME (application name), @FILE_NAME (generated filename with UUID for file operations), and @STATIC_FILE_NAME (without UUID). Use single quotes around --args to prevent shell expansion.",
-		RequiredTools:                    []string{toolJcmd},
+		RequiredTools:                    []string{},
 		GenerateFiles:                    false,
 		GenerateArbitraryFiles:           true,
 		GenerateArbitraryFilesFolderName: toolJcmd,
-		SSHCommand:                       FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) @ARGS | filter_jcmd_remote_message`,
+		SSHCommand: AttachSocketNCHelper + FilterJCMDRemoteMessage + `_pid=$(pidof java)
+JCMD_COMMAND=$(find -executable -name jcmd | head -1)
+if [ -n "${JCMD_COMMAND}" ]; then ${JCMD_COMMAND} ${_pid} @ARGS | filter_jcmd_remote_message; exit 0; fi
+if nc_available; then
+  set -- @ARGS
+  nc_jcmd ${_pid} "$1" "${2:-}" "${3:-}"
+  exit 0
+fi
+echo >&2 "jcmd not found. Install netcat (netcat-openbsd / nmap-ncat) for JRE-only containers."; exit 1`,
 	},
 	{
 		Name:          "jfr-start",
