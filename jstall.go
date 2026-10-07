@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -256,6 +257,12 @@ func (c *JavaPlugin) executeJstall(appName string, jstallArgs string, appInstanc
 	cmd.Stdin = os.Stdin
 
 	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 10 {
+			// Exit code 10 means jstall ran successfully but found a warning condition
+			// (e.g. outdated JVM). Output was already printed; treat as success.
+			return "", nil
+		}
 		return "", fmt.Errorf("jstall execution failed: %w", err)
 	}
 	return "", nil

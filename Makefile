@@ -2,6 +2,8 @@ JAVA_PLUGIN_INSTALLED = $(cf plugins | grep -q)
 JSTALL_JAR = dist/jstall-minimal.jar
 # Set JSTALL_DEV=1 to pull the latest GitHub Actions build instead of the latest release
 JSTALL_DEV ?=
+# Set JSTALL_LOCAL=/path/to/jstall.jar to use a locally built JAR instead of downloading
+JSTALL_LOCAL ?=
 
 all: install
 
@@ -9,7 +11,9 @@ build: compile
 
 $(JSTALL_JAR):
 	mkdir -p dist
-ifdef JSTALL_DEV
+ifdef JSTALL_LOCAL
+	cp $(JSTALL_LOCAL) $@
+else ifdef JSTALL_DEV
 ifeq ($(JSTALL_DEV),1)
 	gh run download -R parttimenerd/jstall -n jstall-minimal-jar --dir dist
 else
@@ -27,8 +31,10 @@ update-jstall:
 
 .PHONY: build compile compile-all update-jstall download-jstall download-hprof-redact update-hprof-redact install remove clean vclean
 
-# When JSTALL_DEV=1, always re-download the jar (skip file existence check)
-ifdef JSTALL_DEV
+# When JSTALL_LOCAL or JSTALL_DEV is set, always re-copy/re-download (skip file existence check)
+ifdef JSTALL_LOCAL
+JSTALL_DEP = update-jstall
+else ifdef JSTALL_DEV
 JSTALL_DEP = update-jstall
 else
 JSTALL_DEP = $(JSTALL_JAR)
