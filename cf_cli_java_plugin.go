@@ -476,15 +476,19 @@ const (
   fi
 };`
 
-	// AttachSocketNCHelper defines a shell function `nc_jcmd PID COMMAND` that sends one
+	// AttachSocketNCHelper defines a shell function `nc_jcmd PID CMDLINE...` that sends one
 	// HotSpot attach-protocol request to the JVM's Unix-domain socket via nc.
 	// This is the same protocol jcmd uses internally (JDK 9+) and works on JRE-only containers.
 	// Socket location: /tmp/.java_pid<PID> (Linux) or ${TMPDIR%/}/.java_pid<PID> (macOS).
 	// If the socket does not exist yet, it is triggered via the standard attach handshake
 	// (write .attach_pid<PID> into the JVM's cwd and send SIGQUIT), then polled for 5 s.
 	// Requires nc with -U support (netcat-openbsd or nmap-ncat).
+	//
+	// Protocol: the entire command line (command + args) goes in the first field, NUL-separated:
+	//   printf '1\0jcmd\0GC.heap_dump /tmp/out.hprof\0\0\0'
+	// Subsequent fields are unused by HotSpot; the JVM splits the first field on spaces.
 	AttachSocketNCHelper = `nc_jcmd() {
-  _pid=$1; _cmd=$2; _arg1=${3:-}; _arg2=${4:-}
+  _pid=$1; shift; _cmdline="$*"
   _sock=$(if [ -S "/tmp/.java_pid${_pid}" ]; then echo "/tmp/.java_pid${_pid}"; \
           elif [ -n "$TMPDIR" ] && [ -S "${TMPDIR%/}/.java_pid${_pid}" ]; then echo "${TMPDIR%/}/.java_pid${_pid}"; fi)
   if [ -z "$_sock" ]; then
@@ -497,10 +501,10 @@ const (
     done
   fi
   [ -z "$_sock" ] && { echo >&2 "nc_jcmd: attach socket not found for PID ${_pid}"; return 1; }
-  _raw=$(printf '1\0jcmd\0%s\0%s\0%s\0' "$_cmd" "$_arg1" "$_arg2" | nc -w 2 -U "$_sock" 2>/dev/null)
+  _raw=$(printf '1\0jcmd\0%s\0\0\0' "$_cmdline" | nc -w 2 -U "$_sock" 2>/dev/null)
   _rc=$(echo "$_raw" | head -n 1)
   _body=$(echo "$_raw" | tail -n +2)
-  if [ "$_rc" != "0" ]; then echo >&2 "nc_jcmd: command '$_cmd' failed (rc=$_rc): $_body"; return 1; fi
+  if [ "$_rc" != "0" ]; then echo >&2 "nc_jcmd: command '$_cmdline' failed (rc=$_rc): $_body"; return 1; fi
   echo "$_body"
 };
 nc_available() { command -v nc >/dev/null 2>&1 && nc -h 2>&1 | grep -q '\-U'; };`
@@ -721,11 +725,7 @@ echo >&2 "jcmd not found. Install netcat (netcat-openbsd / nmap-ncat) for JRE-on
 		SSHCommand: AttachSocketNCHelper + FilterJCMDRemoteMessage + `_pid=$(pidof java)
 JCMD_COMMAND=$(find -executable -name jcmd | head -1)
 if [ -n "${JCMD_COMMAND}" ]; then ${JCMD_COMMAND} ${_pid} @ARGS | filter_jcmd_remote_message; exit 0; fi
-if nc_available; then
-  set -- @ARGS
-  nc_jcmd ${_pid} "$1" "${2:-}" "${3:-}"
-  exit 0
-fi
+if nc_available; then nc_jcmd ${_pid} @ARGS; exit 0; fi
 echo >&2 "jcmd not found. Install netcat (netcat-openbsd / nmap-ncat) for JRE-only containers."; exit 1`,
 	},
 	{
