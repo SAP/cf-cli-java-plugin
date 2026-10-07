@@ -3,12 +3,29 @@ applications:
 - name: sapmachine11
   random-route: true
   path: workload.jar
-  memory: 256M
+  memory: 512M
   health-check-type: http
   health-check-http-endpoint: /health
   buildpacks:
   - sap_java_buildpack_jakarta
   env:
-    JBP_CONFIG_COMPONENTS: "jres: ['com.sap.xs.java.buildpack.jdk.SAPMachineJDK']"
+    # JDK 11 default ReservedCodeCacheSize is 240M; cap it so the memory calculator fits in 512M.
+    # Exclude LoggingLevelChangeAgent from frameworks: the agent JAR in this buildpack is compiled
+    # for Java 17+ (class file version 61.0) and causes UnsupportedClassVersionError on Java 11.
+    JBP_CONFIG_COMPONENTS: "{jres: ['com.sap.xs.java.buildpack.jdk.SAPMachineJDK'],\
+      frameworks: ['com.sap.xs.java.buildpack.framework.MultiBuildpack',\
+      'com.sap.xs.java.buildpack.framework.JavaOpts',\
+      'com.sap.xs.java.buildpack.framework.HanaJDBC',\
+      'com.sap.xs.java.buildpack.framework.PostgresqlJDBC',\
+      'com.sap.xs.java.buildpack.framework.PostgresqlSSLConfig',\
+      'com.sap.xs.java.buildpack.framework.JavaMemoryAssistant',\
+      'com.sap.xs.java.buildpack.framework.MemoryCalculator',\
+      'com.sap.xs.java.buildpack.framework.Resources',\
+      'com.sap.xs.java.buildpack.framework.ResourceConfiguration',\
+      'com.sap.xs.java.buildpack.framework.LogLevelClient',\
+      'com.sap.xs.java.buildpack.framework.JVMKill',\
+      'com.sap.xs.java.buildpack.framework.SystemResourceConfiguration',\
+      'com.sap.xs.java.buildpack.framework.DNSCache',\
+      'com.sap.xs.java.buildpack.framework.ContainerSecurityProvider']}"
     JBP_CONFIG_SAP_MACHINE_JDK: "{ version: 11.+ }"
-    JBP_CONFIG_JAVA_OPTS: "[java_opts: '-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints']"
+    JBP_CONFIG_JAVA_OPTS: "[java_opts: '-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints -XX:ReservedCodeCacheSize=64M']"
