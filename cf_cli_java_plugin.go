@@ -475,6 +475,31 @@ const (
 	cat  # fallback: just pass through the input unchanged
   fi
 };`
+
+	// AttachSocketNCHelper defines a shell function `nc_jcmd PID COMMAND` that sends one
+	// HotSpot attach-protocol request to the JVM's Unix-domain socket via nc.
+	// This is the same protocol jcmd uses internally (JDK 9+) and works on JRE-only containers.
+	// Socket location: /tmp/.java_pid<PID> (Linux) or ${TMPDIR%/}/.java_pid<PID> (macOS).
+	// If the socket does not exist yet, it is triggered via the standard attach handshake
+	// (write .attach_pid<PID> into the JVM's cwd and send SIGQUIT), then polled for 5 s.
+	// Requires nc with -U support (netcat-openbsd or nmap-ncat).
+	AttachSocketNCHelper = `nc_jcmd() {
+  _pid=$1; _cmd=$2; _arg1=${3:-}; _arg2=${4:-}
+  _sock=$(if [ -S "/tmp/.java_pid${_pid}" ]; then echo "/tmp/.java_pid${_pid}"; \
+          elif [ -n "$TMPDIR" ] && [ -S "${TMPDIR%/}/.java_pid${_pid}" ]; then echo "${TMPDIR%/}/.java_pid${_pid}"; fi)
+  if [ -z "$_sock" ]; then
+    _cwd=$(readlink /proc/${_pid}/cwd 2>/dev/null || echo /tmp)
+    touch "${_cwd}/.attach_pid${_pid}" 2>/dev/null; kill -QUIT "${_pid}" 2>/dev/null
+    for _i in 1 2 3 4 5 6 7 8 9 10; do sleep 0.5
+      _sock=$(if [ -S "/tmp/.java_pid${_pid}" ]; then echo "/tmp/.java_pid${_pid}"; \
+              elif [ -n "$TMPDIR" ] && [ -S "${TMPDIR%/}/.java_pid${_pid}" ]; then echo "${TMPDIR%/}/.java_pid${_pid}"; fi)
+      [ -n "$_sock" ] && break
+    done
+  fi
+  [ -z "$_sock" ] && { echo >&2 "nc_jcmd: attach socket not found for PID ${_pid}"; return 1; }
+  _raw=$(printf '1\0jcmd\0%s\0%s\0%s\0' "$_cmd" "$_arg1" "$_arg2" | nc -w 2 -U "$_sock" 2>/dev/null)
+  echo "$_raw" | tail -n +2
+};`
 )
 
 // Run must be implemented by any plugin because it is part of the
@@ -661,31 +686,30 @@ fi`,
 		Name:          "thread-dump",
 		Description:   "Generate a thread dump from a running Java application",
 		GenerateFiles: false,
-		SSHCommand: `JSTACK_COMMAND=$(find -executable -name jstack | head -1);
-		JVMMON_COMMAND=$(find -executable -name jvmmon | head -1) 
-		if [ -z "${JVMMON_COMMAND}" ] && [ -z "${JSTACK_COMMAND}" ]; then
-		echo >&2 "jstack or jvmmon are required for generating thread dump, you can modify your application manifest.yaml on the 'JBP_CONFIG_OPEN_JDK_JRE' environment variable. This could be done like this:
-				---
-				applications:
-				- name: <APP_NAME>
-				memory: 1G
-				path: <PATH_TO_BUILD_ARTIFACT>
-				buildpack: https://github.com/cloudfoundry/java-buildpack
-				env:
-					JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/jammy/x86_64", version: 21.+ } }'
-				
-			"
-		exit 1
-		fi
-		if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi;
-		if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi`,
+		SSHCommand: AttachSocketNCHelper + `
+JSTACK_COMMAND=$(find -executable -name jstack | head -1);
+JVMMON_COMMAND=$(find -executable -name jvmmon | head -1)
+_pid=$(pidof java)
+if [ -n "${JSTACK_COMMAND}" ]; then ${JSTACK_COMMAND} ${_pid}; exit 0; fi
+if [ -n "${JVMMON_COMMAND}" ]; then ${JVMMON_COMMAND} -pid ${_pid} -c "print stacktrace"; exit 0; fi
+if command -v nc >/dev/null 2>&1 && nc -h 2>&1 | grep -q '\-U'; then nc_jcmd ${_pid} Thread.print; exit 0; fi
+echo >&2 "jstack, jvmmon, or nc (netcat-openbsd / nmap-ncat) are required for generating a thread dump.
+To use a JDK image, set JBP_CONFIG_OPEN_JDK_JRE in your manifest.yaml:
+  env:
+    JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: \"https://java-buildpack.cloudfoundry.org/openjdk-jdk/jammy/x86_64\", version: 21.+ } }'
+Or install netcat on the container (apt-get install netcat-openbsd)."
+exit 1`,
 	},
 	{
 		Name:          "vm-info",
 		Description:   "Print information about the Java Virtual Machine running a Java application",
-		RequiredTools: []string{toolJcmd},
 		GenerateFiles: false,
-		SSHCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) VM.info | filter_jcmd_remote_message`,
+		SSHCommand: AttachSocketNCHelper + FilterJCMDRemoteMessage + `
+_pid=$(pidof java)
+JCMD_COMMAND=$(find -executable -name jcmd | head -1)
+if [ -n "${JCMD_COMMAND}" ]; then ${JCMD_COMMAND} ${_pid} VM.info | filter_jcmd_remote_message; exit 0; fi
+if command -v nc >/dev/null 2>&1 && nc -h 2>&1 | grep -q '\-U'; then nc_jcmd ${_pid} VM.info; exit 0; fi
+echo >&2 "jcmd not found. Install netcat (netcat-openbsd / nmap-ncat) for JRE-only containers."; exit 1`,
 	},
 	{
 		Name:                             toolJcmd,
@@ -793,9 +817,13 @@ fi`,
 	{
 		Name:          "vm-version",
 		Description:   "Print the version of the Java Virtual Machine running a Java application",
-		RequiredTools: []string{toolJcmd},
 		GenerateFiles: false,
-		SSHCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) VM.version | filter_jcmd_remote_message`,
+		SSHCommand: AttachSocketNCHelper + FilterJCMDRemoteMessage + `
+_pid=$(pidof java)
+JCMD_COMMAND=$(find -executable -name jcmd | head -1)
+if [ -n "${JCMD_COMMAND}" ]; then ${JCMD_COMMAND} ${_pid} VM.version | filter_jcmd_remote_message; exit 0; fi
+if command -v nc >/dev/null 2>&1 && nc -h 2>&1 | grep -q '\-U'; then nc_jcmd ${_pid} VM.version; exit 0; fi
+echo >&2 "jcmd not found. Install netcat (netcat-openbsd / nmap-ncat) for JRE-only containers."; exit 1`,
 	},
 	{
 		Name:          "vm-vitals",
