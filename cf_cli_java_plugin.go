@@ -227,6 +227,7 @@ type Options struct {
 	Compress          bool
 	Open              bool
 	OpenURL           string
+	OpenURLExplicit   bool // true only when --open-url was explicitly passed
 }
 
 // FlagDefinition holds metadata for a command-line flag
@@ -420,6 +421,7 @@ func (c *JavaPlugin) parseOptions(args []string) (*Options, []string, error) {
 			}
 			return defaultOpenURL
 		}(),
+		OpenURLExplicit: commandFlags.IsSet(flagOpenURL),
 	}
 
 	if options.Redact && options.RedactComplete {
@@ -1055,7 +1057,7 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 			{options.RedactComplete, flagRedactComplete},
 			{options.Compress, flagCompress},
 			{options.Open, flagOpen},
-			{options.OpenURL != "", flagOpenURL},
+			{options.OpenURLExplicit, flagOpenURL},
 		}
 		for _, f := range heapOnlyFlags {
 			if f.set {
