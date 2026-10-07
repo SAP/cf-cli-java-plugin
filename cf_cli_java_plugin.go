@@ -9,6 +9,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -696,7 +697,7 @@ JVMMON_COMMAND=$(find -executable -name jvmmon | head -1)
 _pid=$(pidof java)
 if [ -n "${JSTACK_COMMAND}" ]; then ${JSTACK_COMMAND} ${_pid}; exit 0; fi
 if [ -n "${JVMMON_COMMAND}" ]; then ${JVMMON_COMMAND} -pid ${_pid} -c "print stacktrace"; exit 0; fi
-if command -v nc >/dev/null 2>&1 && nc -h 2>&1 | grep -q '\-U'; then nc_jcmd ${_pid} Thread.print; exit 0; fi
+if nc_available; then nc_jcmd ${_pid} Thread.print; exit 0; fi
 echo >&2 "jstack, jvmmon, or nc (netcat-openbsd / nmap-ncat) are required for generating a thread dump.
 To use a JDK image, set JBP_CONFIG_OPEN_JDK_JRE in your manifest.yaml:
   env:
@@ -712,7 +713,7 @@ exit 1`,
 _pid=$(pidof java)
 JCMD_COMMAND=$(find -executable -name jcmd | head -1)
 if [ -n "${JCMD_COMMAND}" ]; then ${JCMD_COMMAND} ${_pid} VM.info | filter_jcmd_remote_message; exit 0; fi
-if command -v nc >/dev/null 2>&1 && nc -h 2>&1 | grep -q '\-U'; then nc_jcmd ${_pid} VM.info; exit 0; fi
+if nc_available; then nc_jcmd ${_pid} VM.info; exit 0; fi
 echo >&2 "jcmd not found. Install netcat (netcat-openbsd / nmap-ncat) for JRE-only containers."; exit 1`,
 	},
 	{
@@ -830,7 +831,7 @@ echo >&2 "jcmd not found. Install netcat (netcat-openbsd / nmap-ncat) for JRE-on
 _pid=$(pidof java)
 JCMD_COMMAND=$(find -executable -name jcmd | head -1)
 if [ -n "${JCMD_COMMAND}" ]; then ${JCMD_COMMAND} ${_pid} VM.version | filter_jcmd_remote_message; exit 0; fi
-if command -v nc >/dev/null 2>&1 && nc -h 2>&1 | grep -q '\-U'; then nc_jcmd ${_pid} VM.version; exit 0; fi
+if nc_available; then nc_jcmd ${_pid} VM.version; exit 0; fi
 echo >&2 "jcmd not found. Install netcat (netcat-openbsd / nmap-ncat) for JRE-only containers."; exit 1`,
 	},
 	{
@@ -1042,6 +1043,25 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 
 	command := commands[index]
 	c.logVerbosef("Found command: %s - %s", command.Name, command.Description)
+
+	// Warn about heap-dump-only flags used on other commands.
+	if command.Name != cmdHeapDump {
+		heapOnlyFlags := []struct {
+			set  bool
+			name string
+		}{
+			{options.Redact, flagRedact},
+			{options.RedactComplete, flagRedactComplete},
+			{options.Compress, flagCompress},
+			{options.Open, flagOpen},
+			{options.OpenURL != "", flagOpenURL},
+		}
+		for _, f := range heapOnlyFlags {
+			if f.set {
+				fmt.Fprintf(os.Stderr, "Warning: flag '--%s' is only supported by heap-dump and has no effect here.\n", f.name)
+			}
+		}
+	}
 
 	// Only block CF_TRACE for commands that download files (not for read-only commands like vm-version)
 	if os.Getenv("CF_TRACE") == "true" && (command.GenerateFiles || command.GenerateArbitraryFiles) {
@@ -1395,6 +1415,17 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 			reader, waitRemote, err = utils.StreamOverCat(cfSSHArguments, fileName)
 			if err != nil {
 				return "", err
+			}
+			if remoteIsGz {
+				// Remote jmap used gz=1; decompress before passing to hprof-redact
+				// which expects uncompressed HPROF format.
+				gz, gzErr := gzip.NewReader(reader)
+				if gzErr != nil {
+					_ = reader.Close()
+					_ = waitRemote()
+					return "", fmt.Errorf("gzip header error on remote heap dump: %w", gzErr)
+				}
+				reader = gz
 			}
 
 			finalPath, rerr := pipeHeapDumpThroughRedact(redactBin, reader, localFileFullPath, mode, options.RedactKeepOnError)

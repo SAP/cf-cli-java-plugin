@@ -24,6 +24,9 @@ func shellSingleQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `"'"'`) + "'"
 }
 
+// ShellSingleQuote wraps s in single quotes for safe embedding in a shell command string.
+func ShellSingleQuote(s string) string { return shellSingleQuote(s) }
+
 func remoteCatCommand(src string) string {
 	return "exec cat -- " + shellSingleQuote(src)
 }

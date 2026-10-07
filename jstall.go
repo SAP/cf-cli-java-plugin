@@ -20,6 +20,8 @@ import (
 	"strings"
 
 	"github.com/google/shlex"
+
+	"cf.plugin.ref/requires/utils"
 )
 
 //go:embed dist/jstall-minimal.jar
@@ -192,7 +194,7 @@ func buildJstallArgs(jarPath, appName, jstallArgs string, appInstanceIndex int) 
 	// since --cf doesn't support it. See jstallWindowsQuotingFix for why remote
 	// execution additionally needs the system property set above on Windows.
 	if appInstanceIndex != -1 {
-		sshCmd := "cf ssh " + appName + " --app-instance-index " + strconv.Itoa(appInstanceIndex) + " -c"
+		sshCmd := "cf ssh " + utils.ShellSingleQuote(appName) + " --app-instance-index " + strconv.Itoa(appInstanceIndex) + " -c"
 		args = append(args, "--ssh", sshCmd)
 	} else {
 		args = append(args, "--cf", appName)

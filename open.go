@@ -104,7 +104,8 @@ func serveFileOnce(path string, timeout time.Duration) (port int, urlFile string
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		// No WriteTimeout: heap dumps can be several GB; a deadline would abort
+		// the in-progress transfer to the browser on slow machines or large files.
 	}
 
 	go func() { _ = srv.Serve(ln) }()
