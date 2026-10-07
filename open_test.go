@@ -347,7 +347,9 @@ func TestServeFileOnce_ConcurrentGETsNoPanic(t *testing.T) {
 func TestServeFileOnce_ClientDisconnectDoesNotConsumeSingleServe(t *testing.T) {
 	tmp := t.TempDir()
 	p := filepath.Join(tmp, "test.hprof")
-	content := strings.Repeat("HEAP_CONTENT", 1<<14)
+	// 16 MB — must exceed the combined TCP send+receive buffer so io.Copy blocks
+	// when the client disconnects mid-transfer, preventing a spurious shutdown trigger.
+	content := strings.Repeat("HEAP_CONTENT", 1<<20)
 	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
