@@ -2,10 +2,13 @@
 # run-on-all.sh — run a cf java command against all (or filtered) sample apps,
 # group results by similarity, and report.
 #
-# Usage: ./run-on-all.sh [--jdk-only|--sapmachine-only] [--keep-tmp] -- <cf java args...>
+# Usage: ./run-on-all.sh [--jdk-only|--sapmachine-only] [--keep-tmp] -- <cf java subcommand [options]>
+#
+# The app name is inserted automatically after the subcommand: cf java SUBCOMMAND APP [options]
 #
 # Examples:
-#   ./run-on-all.sh -- java --pid 1 --command status
+#   ./run-on-all.sh -- asprof
+#   ./run-on-all.sh -- status
 #   ./run-on-all.sh --jdk-only -- heap-dump
 #   ./run-on-all.sh --keep-tmp -- thread-dump
 set -euo pipefail
@@ -64,7 +67,7 @@ fi
 
 # ── run ───────────────────────────────────────────────────────────────────────
 
-echo "Running: cf java ${CF_ARGS[*]}"
+echo "Running: cf java ${CF_ARGS[0]} APP ${CF_ARGS[*]:1}"
 echo "Apps:    ${APPS[*]}"
 echo ""
 
@@ -77,10 +80,14 @@ run_app() {
   local err="$app_dir/stderr"
   local rc_file="$app_dir/rc"
 
-  # Run from the app's own tmp directory so any downloaded files land there
+  # Run from the app's own tmp directory so any downloaded files land there.
+  # Syntax: cf java SUBCOMMAND APP [options]
+  # CF_ARGS[0] is the subcommand; remaining elements are options/trailing args.
+  local subcmd="${CF_ARGS[0]}"
+  local rest=("${CF_ARGS[@]:1}")
   (
     cd "$app_dir"
-    cf java "$app" "${CF_ARGS[@]}" >"$out" 2>"$err"
+    cf java "$subcmd" "$app" "${rest[@]}" >"$out" 2>"$err"
     echo $? >"$rc_file"
   ) || echo $? >"$rc_file"
 }
