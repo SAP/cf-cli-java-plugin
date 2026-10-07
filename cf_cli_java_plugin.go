@@ -665,8 +665,9 @@ OUTPUT=$( ${JMAP_COMMAND} -dump:format=b${GZ_ARG},file=@FILE_NAME ${_pid} ) || S
 if [ ! -s @FILE_NAME ]; then echo >&2 ${OUTPUT}; exit 1; fi
 if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi
 elif [ -n "${JVMMON_COMMAND}" ]; then
-echo -e 'change command line flag flags=-XX:HeapDumpOnDemandPath=@FSPATH\ndump heap' > setHeapDumpOnDemandPath.sh
-OUTPUT=$( ${JVMMON_COMMAND} -pid ${_pid} -cmd "setHeapDumpOnDemandPath.sh" ) || STATUS_CODE=$?
+echo -e 'change command line flag flags=-XX:HeapDumpOnDemandPath=@FSPATH\ndump heap' > @FSPATH/setHeapDumpOnDemandPath.sh
+OUTPUT=$( ${JVMMON_COMMAND} -pid ${_pid} -cmd "@FSPATH/setHeapDumpOnDemandPath.sh" ) || STATUS_CODE=$?
+rm -f @FSPATH/setHeapDumpOnDemandPath.sh
 sleep 5 # Writing the heap dump is triggered asynchronously -> give the JVM some time to create the file
 HEAP_DUMP_NAME=$(find @FSPATH -name 'java_pid*.hprof' -printf '%T@ %p\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\0' '\n' | head -n 1)
 SIZE=-1; OLD_SIZE=$(stat -c '%s' "${HEAP_DUMP_NAME}"); while [ ${SIZE} != ${OLD_SIZE} ]; do OLD_SIZE=${SIZE}; sleep 3; SIZE=$(stat -c '%s' "${HEAP_DUMP_NAME}"); done
