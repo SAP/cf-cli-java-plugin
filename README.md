@@ -147,7 +147,8 @@ hprof-analyzer $APP_NAME-heapdump-*.hprof report.html
 # Open report.html → "Leak Suspects" and "Top Consumers" tabs
 ```
 
-**Note:** On JRE-only containers without `jmap`, heap dumps are taken via the HotSpot attach socket — see [JRE-only containers](#jre-only-containers) below.
+**Note:** On JRE-only containers without `jmap`, heap dumps are taken via the HotSpot attach socket —
+see [JRE-only containers](#jre-only-containers) below.
 
 ## Usage
 
@@ -431,7 +432,8 @@ dump is being downloaded. The binary is embedded from the
 
 When bandwidth or container disk space is a concern, use `--compress` to transfer the dump in gzip format.
 
-- On **JDK 17+**: `jmap` (or the nc fallback) compresses the dump on the container before transfer; the local file is saved as `.hprof.gz`.
+- On **JDK 17+**: `jmap` (or the nc fallback) compresses the dump on the container before transfer; the
+  local file is saved as `.hprof.gz`.
 - On **JDK < 17**: the container JDK does not support `gz=1`; a warning is printed and the dump is downloaded
   uncompressed as usual.
 
