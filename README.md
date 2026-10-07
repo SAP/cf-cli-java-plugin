@@ -159,7 +159,7 @@ see [JRE-only containers](#jre-only-containers) below.
 Most commands work out of the box on any Java container. The table below shows what each command needs:
 
 | Command | JDK tools needed | JRE-only fallback |
-|---|---|---|
+| --- | --- | --- |
 | `heap-dump` | `jmap` (or `jvmmon` on SapMachine) | `nc -U` (netcat-openbsd / nmap-ncat) |
 | `thread-dump` | `jstack` (or `jvmmon` on SapMachine) | `nc -U` |
 | `vm-info`, `vm-version` | `jcmd` | `nc -U` |

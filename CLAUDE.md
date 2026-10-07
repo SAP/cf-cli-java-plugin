@@ -79,7 +79,7 @@ Run `./setup-dev-env.sh` once to install pre-commit hooks that auto-run formatti
 ### Code Layout
 
 | File | Role |
-|---|---|
+| --- | --- |
 | `cf_cli_java_plugin.go` | Core plugin: `Run`/`GetMetadata` entry points, `Command` struct definitions, `execute()` dispatch, `Options`/flag parsing, SSH error wrapping |
 | `jstall.go` | `jstall`/`status`/`record-status` commands: Java 17+ discovery, JAR extraction, `buildJstallArgs`, `executeJstall` |
 | `redact.go` | Heap dump redaction: embedded binary extraction, `pipeHeapDumpThroughRedact` pipeline |
