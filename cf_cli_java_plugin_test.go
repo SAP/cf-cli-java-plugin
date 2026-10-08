@@ -101,6 +101,34 @@ func TestExecute_UnrecognizedCommand_NoSwapHint_WhenAppUnknown(t *testing.T) {
 	}
 }
 
+func TestExecute_SwappedAppAndCommand_AppNotInCF(t *testing.T) {
+	// cf java sapmachine17 vm-vitals where sapmachine17 IS a known app — should suggest swap
+	p := &JavaPlugin{}
+	conn := &fakeConn{knownApp: "sapmachine17"}
+	_, err := p.execute(conn, []string{cmdJava, "sapmachine17", cmdVmVitals})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "cf java "+cmdVmVitals+" sapmachine17") {
+		t.Errorf("expected swap suggestion in error message, got: %s", msg)
+	}
+}
+
+func TestExecute_NoSwapHint_WhenFirstArgNotKnownApp(t *testing.T) {
+	// cf java sapmachiasdfadfadfne17 vm-vitals — CF doesn't know this app, no swap hint
+	p := &JavaPlugin{}
+	conn := &fakeConn{knownApp: "other-app"}
+	_, err := p.execute(conn, []string{cmdJava, "sapmachiasdfadfadfne17", cmdVmVitals})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "swapped") {
+		t.Errorf("should not suggest swap when CF doesn't know the first arg as an app: %s", msg)
+	}
+}
+
 func TestParseOptions_Open(t *testing.T) {
 	p := &JavaPlugin{}
 	opts, _, err := p.parseOptions([]string{cmdHeapDump, testAppName, "--" + flagOpen})

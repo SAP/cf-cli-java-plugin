@@ -9,10 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
-- Bundle [jstall](https://github.com/parttimenerd/jstall) v0.8.1 (jstall-minimal.jar) for one-shot JVM
+- Bundle [jstall](https://github.com/parttimenerd/jstall) v0.8.2 (jstall-minimal.jar) for one-shot JVM
   inspection via `cf java jstall APP_NAME`. Requires Java 17+ locally. Key subcommands: `status` (thread
   analysis, metaspace, GC, compiler queue), `record-status` (repeated sampling), `flame-graph`, `heap-info`.
   Supports all jstall subcommands via `--args`.
+  `vm-vitals` improvements in v0.8.2: robust parser covering all SapMachine 11–27 text and CSV variants;
+  **Trends** table showing first/last value and direction arrow per column; **Observations** section with
+  automatic signals (heap pressure, growing heap/metaspace, thread growth, CPU steal, swap/RSS growth);
+  fixed duplicate-column-name data loss (`heap-comm` and `meta-comm` previously both rendered as `comm`).
 - `heap-dump --redact`: zeros primitive arrays (`byte[]`, `char[]`, etc.) in the downloaded dump before saving
   (lean redaction mode), using the bundled [hprof-redact](https://github.com/parttimenerd/hprof-analyzer) binary.
   Supported on Linux (amd64, arm64), macOS (Apple Silicon), and Windows (amd64, arm64).

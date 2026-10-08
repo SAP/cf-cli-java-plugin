@@ -49,6 +49,7 @@ const (
 	defaultOpenURL        = "https://parttimenerd.github.io/hprof-analyzer"
 	osWindows             = "windows"
 	cmdHeapDump           = "heap-dump"
+	cmdVmVitals           = "vm-vitals"
 	typeBool              = "bool"
 	typeString            = "string"
 	toolJcmd              = "jcmd"
@@ -838,7 +839,7 @@ if nc_available; then nc_jcmd ${_pid} VM.version; exit 0; fi
 echo >&2 "jcmd not found. Install netcat (netcat-openbsd / nmap-ncat) for JRE-only containers."; exit 1`,
 	},
 	{
-		Name:          "vm-vitals",
+		Name:          cmdVmVitals,
 		Description:   "Print vital statistics about the Java Virtual Machine running a Java application",
 		RequiredTools: []string{toolJcmd},
 		GenerateFiles: false,
@@ -1032,7 +1033,7 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 			secondArg := strings.ToLower(arguments[1])
 			for _, cmd := range commands {
 				if cmd.Name == secondArg {
-					// Confirm the first arg looks like an app name
+					// Confirm the first arg looks like an app name via CF API.
 					if _, appErr := cliConnection.GetApp(commandName); appErr == nil {
 						return "", &InvalidUsageError{message: fmt.Sprintf("Did you mean: cf java %s %s? (app and command appear to be swapped)", secondArg, commandName)}
 					}
