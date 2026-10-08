@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -19,13 +20,15 @@ import (
 	"strings"
 
 	"github.com/google/shlex"
+
+	"cf.plugin.ref/requires/utils"
 )
 
 //go:embed dist/jstall-minimal.jar
 var jstallJarBytes []byte
 
 func javaExecutable() string {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == osWindows {
 		return "java.exe"
 	}
 	return cmdJava
@@ -76,7 +79,7 @@ func platformJavaCandidates() []string {
 	case "linux":
 		matches, _ := filepath.Glob("/usr/lib/jvm/*/bin/" + exe)
 		candidates = append(candidates, matches...)
-	case "windows":
+	case osWindows:
 		for _, envVar := range []string{"ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"} {
 			base := os.Getenv(envVar)
 			if base == "" {
@@ -170,9 +173,41 @@ func formatCommandForDisplay(command string, args []string) string {
 	return command + " " + strings.Join(displayArgs, " ")
 }
 
-// shellQuote wraps s in single quotes, escaping any single quotes within.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+// jstallWindowsQuotingFix is a JVM system property that fixes `cf java status`/`jstall` on Windows.
+// jstall sends its remote shell snippets to the app container by running
+// `ProcessBuilder("cf", "ssh", APP, "-c", payload)`. The payload contains embedded double quotes
+// (e.g. `if [ -n "$JAVA_HOME" ] ...; jcmd "123" "Thread.print"`). With the JDK default
+// (jdk.lang.Process.allowAmbiguousCommands=true -> VERIFICATION_WIN32), Java wraps such an argument
+// in quotes WITHOUT escaping the embedded quotes, so cf.exe's Windows argv parser shreds it into
+// many broken tokens (quotes lost, payload split at spaces) and the command fails.
+// Setting allowAmbiguousCommands=false switches Java to VERIFICATION_WIN32_SAFE, which escapes
+// embedded quotes with backslashes, and the payload arrives at cf.exe exactly as jstall built it.
+// The property only affects process creation on Windows; it is inert on other platforms.
+const jstallWindowsQuotingFix = "-Djdk.lang.Process.allowAmbiguousCommands=false"
+
+// buildJstallArgs assembles the arguments for the jstall JVM invocation (without the java binary).
+func buildJstallArgs(jarPath, appName, jstallArgs string, appInstanceIndex int) ([]string, error) {
+	args := []string{jstallWindowsQuotingFix, "-jar", jarPath}
+
+	// Use --cf which jstall translates to "cf ssh <app> -c" internally via ProcessBuilder
+	// (no sh -c wrapper since v0.7.2). For instance index, fall back to --ssh
+	// since --cf doesn't support it. See jstallWindowsQuotingFix for why remote
+	// execution additionally needs the system property set above on Windows.
+	if appInstanceIndex != -1 {
+		sshCmd := "cf ssh " + utils.ShellSingleQuote(appName) + " --app-instance-index " + strconv.Itoa(appInstanceIndex) + " -c"
+		args = append(args, "--ssh", sshCmd)
+	} else {
+		args = append(args, "--cf", appName)
+	}
+
+	if jstallArgs != "" {
+		splitArgs, err := shlex.Split(jstallArgs)
+		if err != nil {
+			return nil, fmt.Errorf("invalid jstall arguments: %w", err)
+		}
+		args = append(args, splitArgs...)
+	}
+	return args, nil
 }
 
 func (c *JavaPlugin) executeJstall(appName string, jstallArgs string, appInstanceIndex int, dryRun bool) (string, error) {
@@ -188,26 +223,9 @@ func (c *JavaPlugin) executeJstall(appName string, jstallArgs string, appInstanc
 	}
 	c.logVerbosef("JStall JAR at: %s", jarPath)
 
-	args := []string{"-jar", jarPath}
-
-	// Build SSH command with PATH setup so jps/jcmd are discoverable on remote container
-	// SAP Java Buildpack puts JDK tools at deep paths not on $PATH
-	pathSetup := `JDK_BIN=$(dirname "$(find . -executable -name jps 2>/dev/null | head -1)" 2>/dev/null); if [ -n "$JDK_BIN" ]; then export PATH="$JDK_BIN:$PATH"; fi;`
-	// Shell-quote appName to prevent command injection via a maliciously named CF app.
-	sshCmd := "cf ssh " + shellQuote(appName)
-	if appInstanceIndex != -1 {
-		sshCmd += " --app-instance-index " + strconv.Itoa(appInstanceIndex)
-	}
-	sshCmd += " -c"
-	args = append(args, "--ssh", sshCmd)
-	args = append(args, "--ssh-prefix", pathSetup)
-
-	if jstallArgs != "" {
-		splitArgs, err := shlex.Split(jstallArgs)
-		if err != nil {
-			return "", fmt.Errorf("invalid jstall arguments: %w", err)
-		}
-		args = append(args, splitArgs...)
+	args, err := buildJstallArgs(jarPath, appName, jstallArgs, appInstanceIndex)
+	if err != nil {
+		return "", err
 	}
 
 	displayCmd := formatCommandForDisplay(javaPath, args)
@@ -241,6 +259,12 @@ func (c *JavaPlugin) executeJstall(appName string, jstallArgs string, appInstanc
 	cmd.Stdin = os.Stdin
 
 	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 10 {
+			// Exit code 10 means jstall ran successfully but found a warning condition
+			// (e.g. outdated JVM). Output was already printed; treat as success.
+			return "", nil
+		}
 		return "", fmt.Errorf("jstall execution failed: %w", err)
 	}
 	return "", nil

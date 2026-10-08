@@ -26,13 +26,16 @@ _testmain.go
 # Tools
 counterfeiter
 
-# Built binaries
+# Build output directories
 build/
 pkg/
 
 # built project binary (go build)
 cf-java-plugin
+cf-cli-java-plugin
 
+# Local tool binaries (downloaded during development, e.g. gofumpt, gopls)
+bin/
 # Testing directory - sensitive config and test results
 test/test_config.yml
 test/*.hprof
@@ -49,8 +52,55 @@ test/snapshots/
 # Heap dump files
 *.hprof
 
-# Build artifacts
+# Embedded/downloaded build artifacts
 dist
 
-# go
-pkg
+# Local project binaries
+requires
+
+# OS/editor/local tooling
+.DS_Store
+.claude/
+.playwright-mcp/
+.test_success_cache.json
+*.log
+*.tmp
+*.bak
+*~
+
+# Python local caches / coverage
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+venv/
+
+# Local investigation / scratch artifacts
+BUG*.md
+FIX*.md
+*_REPORT.md
+*analysis*.py
+append_*.py
+discover*.py
+investigate*.py
+*_test_output.txt
+*_results.txt
+*.out
+out.zip
+
+# Local runtime artifacts
+sapmachine21-status/
+sapmachine21-status.zip
+sapmachine21-heapdump-*.hprof.gz
+sapmachine21-heapdump-*-redacted.hprof.gz
+
+# Local ad-hoc test helpers/artifacts
+test/doc_bugs_finder.py
+test/sapmachine21-status.zip
+test/test_bugs.py
+test_bugs.sh
+test_edge_cases.py
+test_fixes.py
+
+# Internal planning docs (superpowers skill artifacts)
+docs/superpowers/

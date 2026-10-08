@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  validate-pr:
-    name: Validate Pull Request
+  validate:
+    name: Lint & Test
     runs-on: ubuntu-latest
 
     steps:
@@ -38,6 +38,9 @@ jobs:
           mkdir -p dist
           curl -fsSL -o dist/jstall-minimal.jar https://github.com/parttimenerd/jstall/releases/latest/download/jstall-minimal.jar
 
+      - name: Download hprof-redact binaries for go:embed
+        run: python3 .github/workflows/build.py --deps-only
+
       - name: Install Go dependencies
         run: go mod tidy -e || true
 
@@ -49,9 +52,6 @@ jobs:
       - name: Run govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          # Run in JSON mode and emit GitHub Actions warning annotations for each finding.
-          # govulncheck outputs multi-line JSON objects (not line-delimited), so we use
-          # raw_decode to parse successive top-level objects from the output stream.
           govulncheck -json . 2>/dev/null | python3 -c "
           import sys, json
           decoder = json.JSONDecoder()
@@ -87,15 +87,16 @@ jobs:
       - name: Lint Go code
         run: ./scripts/lint-go.sh ci
 
+      - name: Run Go tests
+        run: go test -v -race ./...
+
       - name: Check Python test suite
         id: check-python
         run: |
           if [ -f "test/requirements.txt" ] && [ -f "test/setup.sh" ]; then
             echo "python_tests_exist=true" >> $GITHUB_OUTPUT
-            echo "✅ Python test suite found"
           else
             echo "python_tests_exist=false" >> $GITHUB_OUTPUT
-            echo "⚠️  Python test suite not found - skipping Python validation"
           fi
 
       - name: Setup Python environment
@@ -114,48 +115,86 @@ jobs:
       - name: Lint Markdown files
         run: ./scripts/lint-markdown.sh ci
 
-      # TODO: Re-enable Python tests when ready
-      # - name: Run Python tests
-      #   if: steps.check-python.outputs.python_tests_exist == 'true'
-      #   run: |
-      #     cd test
-      #     source venv/bin/activate
-      #     echo "🧪 Running Python tests..."
-      #     if ! pytest -v --tb=short; then
-      #       echo "❌ Python tests failed."
-      #       exit 1
-      #     fi
-      #     echo "✅ Python tests passed!"
-      #   env:
-      #     CF_API: ${{ secrets.CF_API }}
-      #     CF_USERNAME: ${{ secrets.CF_USERNAME }}
-      #     CF_PASSWORD: ${{ secrets.CF_PASSWORD }}
-      #     CF_ORG: ${{ secrets.CF_ORG }}
-      #     CF_SPACE: ${{ secrets.CF_SPACE }}
+  build:
+    name: Build (${{ matrix.os }})
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ">=1.23.5"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Download JStall minimal JAR for go:embed
+        shell: bash
+        run: |
+          mkdir -p dist
+          curl -fsSL -o dist/jstall-minimal.jar https://github.com/parttimenerd/jstall/releases/latest/download/jstall-minimal.jar
+
+      - name: Download hprof-redact binaries for go:embed
+        shell: bash
+        run: python3 .github/workflows/build.py --deps-only
+
+      - name: Install Go dependencies
+        run: go mod tidy -e || true
+
+      - name: Run Go tests
+        shell: bash
+        run: go test -race ./...
 
       - name: Build plugin
+        shell: bash
+        run: python3 .github/workflows/build.py
+
+      - name: Install CF CLI (Windows only)
+        if: runner.os == 'Windows'
+        shell: bash
         run: |
-          echo "🔨 Building plugin..."
-          if ! python3 .github/workflows/build.py; then
-            echo "❌ Build failed."
+          choco install cloudfoundry-cli -y --no-progress
+          cf version
+
+      - name: Smoke-test jstall on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          plugin_bin=$(ls dist/cf-cli-java-plugin-windows-* | head -1)
+          # The binary must have a .exe extension; cf install-plugin rejects files without it.
+          if [[ "$plugin_bin" != *.exe ]]; then
+            echo "FAIL: Windows plugin binary missing .exe extension: $plugin_bin"
             exit 1
           fi
-          echo "✅ Build successful!"
+          cf install-plugin "$plugin_bin" -f
 
-      - name: Validation Summary
-        run: |
-          echo ""
-          echo "🎉 Pull Request Validation Summary"
-          echo "=================================="
-          echo "✅ Go code formatting and linting"
-          echo "✅ Go tests"
-          echo "✅ Markdown formatting and linting"
-          if [ "${{ steps.check-python.outputs.python_tests_exist }}" == "true" ]; then
-            echo "✅ Python code quality checks"
-            echo "✅ Python tests"
-          else
-            echo "⚠️  Python tests skipped (not found)"
+          # Run cf java status — not logged in so CF will respond with an auth
+          # error. That means jstall successfully invoked cf.exe via ProcessBuilder.
+          # Any Windows invocation bug (sh not found, unknown flag, etc.) would
+          # produce a different error and fail this check.
+          output=$(cf java status fake-app 2>&1 || true)
+          echo "Output: $output"
+
+          if ! echo "$output" | grep -qiE "not logged in|login|token|authenticate"; then
+            echo "FAIL: expected CF auth error, got: $output"
+            exit 1
           fi
-          echo "✅ Plugin build"
-          echo ""
-          echo "🚀 Ready for merge!"
+          echo "OK: jstall reached CF as expected"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: cf-cli-java-plugin-${{ matrix.os }}
+          path: |
+            dist/*
+            !dist/jstall-minimal.jar
+            !dist/hprof-redact-*
