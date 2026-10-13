@@ -63,6 +63,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
+          rm -f dist/jstall-minimal.jar
           gh run download -R parttimenerd/jstall -n jstall-minimal-jar --dir dist
           ls -lh dist/jstall-minimal.jar
         env:

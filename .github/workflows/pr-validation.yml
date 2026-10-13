@@ -36,6 +36,7 @@ jobs:
       - name: Download JStall minimal JAR for go:embed
         run: |
           mkdir -p dist
+          rm -f dist/jstall-minimal.jar
           gh run download -R parttimenerd/jstall -n jstall-minimal-jar --dir dist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -143,6 +144,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
+          rm -f dist/jstall-minimal.jar
           gh run download -R parttimenerd/jstall -n jstall-minimal-jar --dir dist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
