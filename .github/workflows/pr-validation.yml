@@ -37,6 +37,8 @@ jobs:
         run: |
           mkdir -p dist
           gh run download -R parttimenerd/jstall -n jstall-minimal-jar --dir dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download hprof-redact binaries for go:embed
         run: python3 .github/workflows/build.py --deps-only
@@ -142,6 +144,8 @@ jobs:
         run: |
           mkdir -p dist
           gh run download -R parttimenerd/jstall -n jstall-minimal-jar --dir dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download hprof-redact binaries for go:embed
         shell: bash

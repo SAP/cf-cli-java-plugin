@@ -65,6 +65,8 @@ jobs:
           mkdir -p dist
           gh run download -R parttimenerd/jstall -n jstall-minimal-jar --dir dist
           ls -lh dist/jstall-minimal.jar
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies
         run: go mod tidy -e || true
@@ -183,6 +185,8 @@ jobs:
         run: |
           JSTALL_VERSION=$(gh run list -R parttimenerd/jstall --branch main --limit 1 --json headSha,databaseId --jq '.[0] | "main@" + (.headSha[:8]) + " (run " + (.databaseId|tostring) + ")"')
           echo "version=$JSTALL_VERSION" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: thomashampson/delete-older-releases@2ff234dfe6ad2757ac7e53d96e298fbe82b0fd56 # @main
         with:

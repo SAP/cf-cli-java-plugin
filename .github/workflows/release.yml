@@ -45,6 +45,8 @@ jobs:
         run: |
           mkdir -p dist
           gh run download -R parttimenerd/jstall -n jstall-minimal-jar --dir dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies
         run: go mod tidy -e || true
@@ -95,6 +97,8 @@ jobs:
           pip install PyYAML requests
 
       - name: Parse version and update Go source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Parse version input (e.g., "4.1.0" -> major=4, minor=1, build=0)
           VERSION="${{ github.event.inputs.version }}"
