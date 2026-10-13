@@ -63,7 +63,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          curl -fsSL -o dist/jstall-minimal.jar https://github.com/parttimenerd/jstall/releases/latest/download/jstall-minimal.jar
+          gh run download -R parttimenerd/jstall -n jstall-minimal-jar --dir dist
           ls -lh dist/jstall-minimal.jar
 
       - name: Install dependencies
@@ -181,7 +181,7 @@ jobs:
       - name: Get JStall version
         id: jstall
         run: |
-          JSTALL_VERSION=$(curl -s https://api.github.com/repos/parttimenerd/jstall/releases/latest | python3 -c "import sys,json; print(json.load(sys.stdin).get('tag_name','unknown'))")
+          JSTALL_VERSION=$(gh run list -R parttimenerd/jstall --branch main --limit 1 --json headSha,databaseId --jq '.[0] | "main@" + (.headSha[:8]) + " (run " + (.databaseId|tostring) + ")"')
           echo "version=$JSTALL_VERSION" >> $GITHUB_OUTPUT
 
       - uses: thomashampson/delete-older-releases@2ff234dfe6ad2757ac7e53d96e298fbe82b0fd56 # @main

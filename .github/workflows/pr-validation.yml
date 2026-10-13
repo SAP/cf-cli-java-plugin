@@ -36,7 +36,7 @@ jobs:
       - name: Download JStall minimal JAR for go:embed
         run: |
           mkdir -p dist
-          curl -fsSL -o dist/jstall-minimal.jar https://github.com/parttimenerd/jstall/releases/latest/download/jstall-minimal.jar
+          gh run download -R parttimenerd/jstall -n jstall-minimal-jar --dir dist
 
       - name: Download hprof-redact binaries for go:embed
         run: python3 .github/workflows/build.py --deps-only
@@ -141,7 +141,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          curl -fsSL -o dist/jstall-minimal.jar https://github.com/parttimenerd/jstall/releases/latest/download/jstall-minimal.jar
+          gh run download -R parttimenerd/jstall -n jstall-minimal-jar --dir dist
 
       - name: Download hprof-redact binaries for go:embed
         shell: bash

@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          curl -fsSL -o dist/jstall-minimal.jar https://github.com/parttimenerd/jstall/releases/latest/download/jstall-minimal.jar
+          gh run download -R parttimenerd/jstall -n jstall-minimal-jar --dir dist
 
       - name: Install dependencies
         run: go mod tidy -e || true
@@ -101,7 +101,7 @@ jobs:
           IFS='.' read -r MAJOR MINOR BUILD <<< "$VERSION"
           
           # Determine the bundled JStall version
-          export JSTALL_VERSION=$(curl -s https://api.github.com/repos/parttimenerd/jstall/releases/latest | python3 -c "import sys,json; print(json.load(sys.stdin).get('tag_name','unknown'))")
+          export JSTALL_VERSION=$(gh run list -R parttimenerd/jstall --branch main --limit 1 --json headSha,databaseId --jq '.[0] | "main@" + (.headSha[:8]) + " (run " + (.databaseId|tostring) + ")"')
           echo "Bundled JStall version: $JSTALL_VERSION"
 
           echo "Updating version to $MAJOR.$MINOR.$BUILD"
