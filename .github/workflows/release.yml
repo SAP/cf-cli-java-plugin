@@ -49,8 +49,6 @@ jobs:
         with:
           java-version: "17"
           distribution: sapmachine
-          cache: maven
-          cache-dependency-path: /tmp/jstall/pom.xml
 
       - name: Build JStall minimal JAR from source
         shell: bash
