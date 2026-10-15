@@ -45,7 +45,8 @@ jobs:
         run: |
           mkdir -p dist
           rm -f dist/jstall-minimal.jar
-          gh run download -R parttimenerd/jstall -n jstall-minimal-jar --dir dist
+          RUN_ID=$(gh run list -R parttimenerd/jstall --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          gh run download "$RUN_ID" -R parttimenerd/jstall -n jstall-minimal-jar --dir dist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
