@@ -40,16 +40,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install PyYAML
 
+      - name: Clone JStall
+        shell: bash
+        run: git clone --depth 1 https://github.com/parttimenerd/jstall.git /tmp/jstall
+
       - name: Set up Java 17 for building JStall
         uses: actions/setup-java@v5
         with:
           java-version: "17"
           distribution: sapmachine
+          cache: maven
+          cache-dependency-path: /tmp/jstall/pom.xml
 
       - name: Build JStall minimal JAR from source
         shell: bash
         run: |
-          git clone --depth 1 https://github.com/parttimenerd/jstall.git /tmp/jstall
           cd /tmp/jstall
           PYTHONUTF8=1 python3 release.py test-minimal-jar
           mkdir -p "$GITHUB_WORKSPACE/dist"
