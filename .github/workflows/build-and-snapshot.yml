@@ -59,16 +59,22 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
-      - name: Download JStall minimal JAR for go:embed
+      - name: Set up Java 17 for building JStall
+        uses: actions/setup-java@v5
+        with:
+          java-version: "17"
+          distribution: sapmachine
+          cache: maven
+
+      - name: Build JStall minimal JAR from source
         shell: bash
         run: |
-          mkdir -p dist
-          rm -f dist/jstall-minimal.jar
-          RUN_ID=$(gh run list -R parttimenerd/jstall --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')
-          gh run download "$RUN_ID" -R parttimenerd/jstall -n jstall-minimal-jar --dir dist
-          ls -lh dist/jstall-minimal.jar
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          git clone --depth 1 https://github.com/parttimenerd/jstall.git /tmp/jstall
+          cd /tmp/jstall
+          python3 release.py test-minimal-jar
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cp target/jstall-minimal.jar "$GITHUB_WORKSPACE/dist/jstall-minimal.jar"
+          ls -lh "$GITHUB_WORKSPACE/dist/jstall-minimal.jar"
 
       - name: Install dependencies
         run: go mod tidy -e || true
