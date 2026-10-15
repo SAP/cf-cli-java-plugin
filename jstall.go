@@ -187,7 +187,15 @@ const jstallWindowsQuotingFix = "-Djdk.lang.Process.allowAmbiguousCommands=false
 
 // buildJstallArgs assembles the arguments for the jstall JVM invocation (without the java binary).
 func buildJstallArgs(jarPath, appName, jstallArgs string, appInstanceIndex int) ([]string, error) {
-	args := []string{jstallWindowsQuotingFix, "-jar", jarPath}
+	args := []string{
+		jstallWindowsQuotingFix,
+		// Force UTF-8 output regardless of platform encoding (fixes CP1252 on Windows).
+		// These system properties are supported by Java 17+.
+		"-Dfile.encoding=UTF-8",
+		"-Dstdout.encoding=UTF-8",
+		"-Dstderr.encoding=UTF-8",
+		"-jar", jarPath,
+	}
 
 	// Use --cf which jstall translates to "cf ssh <app> -c" internally via ProcessBuilder
 	// (no sh -c wrapper since v0.7.2). For instance index, fall back to --ssh
