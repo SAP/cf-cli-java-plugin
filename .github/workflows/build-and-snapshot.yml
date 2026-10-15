@@ -63,7 +63,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          gh release download v0.8.5 -R parttimenerd/jstall -p jstall-minimal.jar -D dist --clobber
+          gh release download v0.8.6 -R parttimenerd/jstall -p jstall-minimal.jar -D dist --clobber
           ls -lh dist/jstall-minimal.jar
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
