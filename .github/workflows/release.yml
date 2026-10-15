@@ -51,7 +51,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/parttimenerd/jstall.git /tmp/jstall
           cd /tmp/jstall
-          python3 release.py test-minimal-jar
+          PYTHONIOENCODING=utf-8 python3 release.py test-minimal-jar
           mkdir -p "$GITHUB_WORKSPACE/dist"
           cp target/jstall-minimal.jar "$GITHUB_WORKSPACE/dist/jstall-minimal.jar"
 
