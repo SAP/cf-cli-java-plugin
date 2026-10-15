@@ -33,22 +33,12 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Clone JStall
-        run: git clone --depth 1 https://github.com/parttimenerd/jstall.git /tmp/jstall
-
-      - name: Set up Java 17 for building JStall
-        uses: actions/setup-java@v5
-        with:
-          java-version: "17"
-          distribution: sapmachine
-
-      - name: Build JStall minimal JAR from source
-        shell: bash
+      - name: Download JStall minimal JAR for go:embed
         run: |
-          cd /tmp/jstall
-          PYTHONUTF8=1 python3 release.py test-minimal-jar
-          mkdir -p "$GITHUB_WORKSPACE/dist"
-          cp target/jstall-minimal.jar "$GITHUB_WORKSPACE/dist/jstall-minimal.jar"
+          mkdir -p dist
+          gh release download v0.8.5 -R parttimenerd/jstall -p jstall-minimal.jar -D dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download hprof-redact binaries for go:embed
         run: python3 .github/workflows/build.py --deps-only
@@ -149,23 +139,13 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Clone JStall
-        shell: bash
-        run: git clone --depth 1 https://github.com/parttimenerd/jstall.git /tmp/jstall
-
-      - name: Set up Java 17 for building JStall
-        uses: actions/setup-java@v5
-        with:
-          java-version: "17"
-          distribution: sapmachine
-
-      - name: Build JStall minimal JAR from source
+      - name: Download JStall minimal JAR for go:embed
         shell: bash
         run: |
-          cd /tmp/jstall
-          PYTHONUTF8=1 python3 release.py test-minimal-jar
-          mkdir -p "$GITHUB_WORKSPACE/dist"
-          cp target/jstall-minimal.jar "$GITHUB_WORKSPACE/dist/jstall-minimal.jar"
+          mkdir -p dist
+          gh release download v0.8.5 -R parttimenerd/jstall -p jstall-minimal.jar -D dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download hprof-redact binaries for go:embed
         shell: bash
