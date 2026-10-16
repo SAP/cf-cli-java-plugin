@@ -29,7 +29,15 @@ update-jstall:
 	rm -f $(JSTALL_JAR)
 	$(MAKE) download-jstall
 
-.PHONY: build compile compile-all update-jstall download-jstall download-hprof-redact update-hprof-redact install remove clean vclean
+verify-jstall: $(JSTALL_JAR)
+	@expected=$$(gh release view --repo parttimenerd/jstall --json tagName --jq '.tagName' | sed 's/^v//') && \
+	actual=$$(java -jar $(JSTALL_JAR) --version 2>&1 | head -1) && \
+	echo "Latest jstall release: $$expected  JAR reports: $$actual" && \
+	if [ "$$actual" != "$$expected" ]; then \
+	  echo "ERROR: version mismatch — run: make update-jstall" >&2; exit 1; \
+	fi
+
+.PHONY: build compile compile-all update-jstall download-jstall verify-jstall download-hprof-redact update-hprof-redact install remove clean vclean
 
 # When JSTALL_LOCAL or JSTALL_DEV is set, always re-copy/re-download (skip file existence check)
 ifdef JSTALL_LOCAL

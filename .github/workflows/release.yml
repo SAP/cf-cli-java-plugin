@@ -44,7 +44,14 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          gh release download v0.8.6 -R parttimenerd/jstall -p jstall-minimal.jar -D dist --clobber
+          gh release download -R parttimenerd/jstall -p jstall-minimal.jar -D dist --clobber
+          expected=$(gh release view --repo parttimenerd/jstall --json tagName --jq '.tagName' | sed 's/^v//')
+          actual=$(java -jar dist/jstall-minimal.jar --version 2>&1 | head -1)
+          echo "Expected jstall version: $expected, JAR reports: $actual"
+          if [ "$actual" != "$expected" ]; then
+            echo "ERROR: jstall-minimal.jar reports version $actual but latest release is $expected" >&2
+            exit 1
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
