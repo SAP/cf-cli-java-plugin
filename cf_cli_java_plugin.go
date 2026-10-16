@@ -1225,7 +1225,7 @@ func (c *JavaPlugin) prepareRemotePaths(ctx *commandContext) error {
 	ctx.fspath = ctx.remoteDir
 	ctx.fileExt = ctx.command.FileExtension
 	if ctx.command.Name == cmdHeapDump && ctx.options.Compress {
-		// Only set .hprof.gz for jvmmon path (explicit compress); jmap always writes .hprof on remote
+		// jmap always writes a .hprof file on the container; only jvmmon may produce a .hprof.gz file
 		ctx.fileExt = extHprof
 	}
 
@@ -1240,7 +1240,8 @@ func (c *JavaPlugin) prepareRemotePaths(ctx *commandContext) error {
 	}
 
 	if ctx.options.DryRun {
-		// In dry-run mode, use user-supplied path or /tmp without SSH validation
+		// Dry-run cannot discover volume mounts without contacting CF; use the
+		// supplied container directory or an offline placeholder.
 		if ctx.fspath == "" {
 			ctx.fspath = "/tmp"
 		}

@@ -7,6 +7,9 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -193,5 +196,34 @@ func TestResolveLocalDir_RejectsTraversal(t *testing.T) {
 	_, err := resolveLocalDir("../tmp")
 	if err == nil {
 		t.Fatal("expected error for path traversal, got nil")
+	}
+}
+
+func TestPrepareRemotePaths_DryRunDoesNotCallCF(t *testing.T) {
+	if runtime.GOOS == osWindows {
+		t.Skip("test uses a POSIX shell to detect CF CLI calls")
+	}
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "called")
+	cf := filepath.Join(dir, "cf")
+	if err := os.WriteFile(cf, []byte("#!/bin/sh\nprintf 'called' >> \"$CF_CALL_LOG\"\nexit 1\n"), 0o700); err != nil { //nolint:gosec // executable test-only CF stub lives in t.TempDir
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	t.Setenv("CF_CALL_LOG", marker)
+
+	ctx := &commandContext{
+		command:         &Command{Name: cmdHeapDump, GenerateFiles: true, FileExtension: extHprof},
+		options:         &Options{DryRun: true},
+		applicationName: testAppName,
+	}
+	if err := (&JavaPlugin{}).prepareRemotePaths(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.fspath != "/tmp" {
+		t.Fatalf("expected offline dry-run fallback /tmp, got %q", ctx.fspath)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("dry-run called cf (stat error: %v)", err)
 	}
 }
