@@ -52,6 +52,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 
+- `cf java asprof APP --args '<non-start command>' --no-download` now honours `--no-download` and leaves the
+  generated files in the container, as the command help has always documented. Previously the flag was silently
+  ignored for every `asprof` invocation other than `start`, and the files were downloaded anyway.
+- `cf java asprof APP --args 'start '` (a trailing space after `start`) is now recognised as a `start` invocation.
+  Previously the trailing space made the plugin treat it as a file-producing command and attempt a download.
+- Remote files are no longer kept in the container after a successful download just because `--no-download` was
+  passed to an `asprof` command that overrode it. Retention is now decided by the effective download behaviour,
+  so `--keep` is the only way to preserve a file that was downloaded.
+- Commands configured with a file extension the plugin cannot locate now fail before the remote command is
+  executed, instead of after it had already written a file into the container.
+- Fixed a latent argument-corruption bug in the file transfer path: the `cf ssh` argument slice was mutated in
+  place and shared across `ls`/`cat`/`rm` invocations, so overlapping remote calls could overwrite each other's
+  remote command. Each remote invocation now builds its own argument slice.
 - Windows: `cf install-plugin <URL>` now works — the Windows binary is released with the required `.exe` extension
   (`cf-cli-java-plugin-windows-amd64.exe`). Previously, CF CLI rejected the downloaded temp file with
   *"temp/...exe doesn't exist"*.
@@ -61,8 +74,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Better error when app name and subcommand are accidentally swapped (e.g. `cf java my-app heap-dump` instead
   of `cf java heap-dump my-app`): if the first argument matches a known app in the current space, the error now
   suggests the corrected command.
-- Bumped Go toolchain to 1.26.8 to resolve six standard-library vulnerabilities
-  (GO-2026-5856, GO-2026-5972, GO-2026-5039, GO-2026-5037, GO-2026-6089, GO-2026-6090).
 
 ## [4.0.2]
 

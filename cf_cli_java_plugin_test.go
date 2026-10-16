@@ -178,3 +178,20 @@ func TestParseOptions_Open_DryRun_NoError(t *testing.T) {
 		t.Error("expected DryRun=true")
 	}
 }
+
+func TestResolveLocalDir_AllowsDotsInFilename(t *testing.T) {
+	got, err := resolveLocalDir("./sdfsdf..file.txt")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "./sdfsdf..file.txt" {
+		t.Fatalf("unexpected local dir: %q", got)
+	}
+}
+
+func TestResolveLocalDir_RejectsTraversal(t *testing.T) {
+	_, err := resolveLocalDir("../tmp")
+	if err == nil {
+		t.Fatal("expected error for path traversal, got nil")
+	}
+}
