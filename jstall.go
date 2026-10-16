@@ -208,10 +208,6 @@ func buildJstallArgs(jarPath, appName, jstallArgs string, appInstanceIndex int) 
 		args = append(args, "--cf", appName)
 	}
 
-	// Always use ASCII output: jstall runs locally and its output is captured as a string,
-	// so Unicode arrows would be garbled on Windows CP1252 terminals regardless of JVM encoding.
-	args = append(args, "--unicode", "off")
-
 	if jstallArgs != "" {
 		splitArgs, err := shlex.Split(jstallArgs)
 		if err != nil {
@@ -219,6 +215,13 @@ func buildJstallArgs(jarPath, appName, jstallArgs string, appInstanceIndex int) 
 		}
 		args = append(args, splitArgs...)
 	}
+
+	// Always use ASCII output: jstall runs locally and its output is captured as a string,
+	// so Unicode arrows would be garbled on Windows CP1252 terminals regardless of JVM encoding.
+	// Must come after the subcommand name (which is part of jstallArgs) since --unicode is
+	// declared on the subcommand, not the top-level Main class.
+	args = append(args, "--unicode", "off")
+
 	return args, nil
 }
 
