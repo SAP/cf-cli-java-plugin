@@ -9,6 +9,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"code.cloudfoundry.org/cli/cf/terminal"
 	"code.cloudfoundry.org/cli/cf/trace"
@@ -31,19 +33,31 @@ var _ plugin.Plugin = (*JavaPlugin)(nil)
 
 // String constants extracted to satisfy goconst linter.
 const (
-	cmdSSH           = "ssh"
-	cmdJava          = "java"
-	flagKeep         = "keep"
-	flagNoDownload   = "no-download"
-	flagContainerDir = "container-dir"
-	flagLocalDir     = "local-dir"
-	typeBool         = "bool"
-	typeString       = "string"
-	toolJcmd         = "jcmd"
-	toolAsprof       = "asprof"
-	extJFR           = ".jfr"
-	labelJFR         = "JFR recording"
-	partJFR          = "jfr"
+	cmdSSH                = "ssh"
+	cmdJava               = "java"
+	flagKeep              = "keep"
+	flagNoDownload        = "no-download"
+	flagContainerDir      = "container-dir"
+	flagLocalDir          = "local-dir"
+	flagRedact            = "redact"
+	flagRedactComplete    = "redact-complete"
+	flagRedactKeepOnError = "redact-keep-on-error"
+	flagCompress          = "compress"
+	flagOpen              = "open"
+	flagOpenURL           = "open-url"
+	defaultOpenURL        = "https://parttimenerd.github.io/hprof-analyzer"
+	osWindows             = "windows"
+	cmdHeapDump           = "heap-dump"
+	cmdVmVitals           = "vm-vitals"
+	typeBool              = "bool"
+	typeString            = "string"
+	toolJcmd              = "jcmd"
+	toolAsprof            = "asprof"
+	extJFR                = ".jfr"
+	labelJFR              = "JFR recording"
+	partJFR               = "jfr"
+	extHprof              = ".hprof"
+	extHprofGz            = ".hprof.gz"
 )
 
 // JavaPlugin is a CF CLI plugin that supports taking heap and thread dumps on demand
@@ -198,15 +212,22 @@ func (c *JavaPlugin) checkSSHConnectivity(appName string, appInstanceIndex int) 
 
 // Options holds all command-line options for the Java plugin
 type Options struct {
-	AppInstanceIndex int
-	Keep             bool
-	NoDownload       bool
-	DryRun           bool
-	Verbose          bool
-	Full             bool
-	ContainerDir     string
-	LocalDir         string
-	Args             string
+	AppInstanceIndex  int
+	Keep              bool
+	NoDownload        bool
+	DryRun            bool
+	Verbose           bool
+	Full              bool
+	ContainerDir      string
+	LocalDir          string
+	Args              string
+	Redact            bool
+	RedactComplete    bool
+	RedactKeepOnError bool
+	Compress          bool
+	Open              bool
+	OpenURL           string
+	OpenURLExplicit   bool // true only when --open-url was explicitly passed
 }
 
 // FlagDefinition holds metadata for a command-line flag
@@ -285,6 +306,42 @@ var flagDefinitions = []FlagDefinition{
 		Description: "Miscellaneous arguments to pass to the command (if supported) in the container, be aware to end it with a space if it is a simple option. For commands that create arbitrary files (jcmd, asprof), the environment variables @FSPATH, @ARGS, @APP_NAME, @FILE_NAME, and @STATIC_FILE_NAME are available in --args to reference the working directory path, arguments, application name, and generated file name respectively.",
 		Type:        typeString,
 	},
+	{
+		Name:        flagRedact,
+		Usage:       "redact heap dump (lean mode: zero primitive arrays only) before saving locally",
+		Description: "redact heap dump before saving locally (lean mode: zero primitive arrays only)",
+		Type:        typeBool,
+	},
+	{
+		Name:        flagRedactComplete,
+		Usage:       "redact heap dump (complete mode: zero all primitive values) before saving locally",
+		Description: "redact heap dump before saving locally (complete mode: zero all primitive values)",
+		Type:        typeBool,
+	},
+	{
+		Name:        flagRedactKeepOnError,
+		Usage:       "keep partially-written redacted file if redaction fails (default: delete it)",
+		Description: "keep partially-written redacted file if redaction fails (default: delete it)",
+		Type:        typeBool,
+	},
+	{
+		Name:        flagCompress,
+		Usage:       "compress heap dump on container using jmap gz=1 (JDK 17+) to reduce transfer size; output is .hprof.gz",
+		Description: "compress heap dump on the container before downloading (JDK 17+, reduces transfer size); output file will be .hprof.gz",
+		Type:        typeBool,
+	},
+	{
+		Name:        flagOpen,
+		Usage:       "open the heap dump in the hprof-analyzer web app after downloading",
+		Description: "open the heap dump in the hprof-analyzer web app after downloading",
+		Type:        typeBool,
+	},
+	{
+		Name:        flagOpenURL,
+		Usage:       "base URL of the hprof-analyzer instance to open (implies --open)",
+		Description: "base URL of the hprof-analyzer instance to open (implies --open)",
+		Type:        typeString,
+	},
 }
 
 func (c *JavaPlugin) createOptionsParser() flags.FlagContext {
@@ -315,7 +372,10 @@ func (c *JavaPlugin) parseOptions(args []string) (*Options, []string, error) {
 	}
 
 	appInstanceIndex := commandFlags.Int("app-instance-index")
-	appInstanceIndexSet := commandFlags.IsSet("app-instance-index")
+	// simonleung8/flags registers flags with non-zero defaults in flagsets at init time,
+	// so IsSet() returns true even when the flag was not explicitly provided.
+	// Check against the known default (-1) to detect actual user-provided values.
+	appInstanceIndexSet := commandFlags.IsSet("app-instance-index") && appInstanceIndex != -1
 	keep := commandFlags.IsSet("keep")
 	noDownload := commandFlags.IsSet("no-download")
 
@@ -341,15 +401,39 @@ func (c *JavaPlugin) parseOptions(args []string) (*Options, []string, error) {
 	}
 
 	options := &Options{
-		AppInstanceIndex: appInstanceIndex,
-		Keep:             keep,
-		NoDownload:       noDownload,
-		DryRun:           commandFlags.IsSet("dry-run"),
-		Verbose:          commandFlags.IsSet("verbose"),
-		Full:             commandFlags.IsSet("full"),
-		ContainerDir:     commandFlags.String("container-dir"),
-		LocalDir:         commandFlags.String("local-dir"),
-		Args:             commandFlags.String("args"),
+		AppInstanceIndex:  appInstanceIndex,
+		Keep:              keep,
+		NoDownload:        noDownload,
+		DryRun:            commandFlags.IsSet("dry-run"),
+		Verbose:           commandFlags.IsSet("verbose"),
+		Full:              commandFlags.IsSet("full"),
+		ContainerDir:      commandFlags.String("container-dir"),
+		LocalDir:          commandFlags.String("local-dir"),
+		Args:              commandFlags.String("args"),
+		Redact:            commandFlags.IsSet(flagRedact),
+		RedactComplete:    commandFlags.IsSet(flagRedactComplete),
+		RedactKeepOnError: commandFlags.IsSet(flagRedactKeepOnError),
+		Compress:          commandFlags.IsSet(flagCompress),
+		Open:              commandFlags.IsSet(flagOpen) || commandFlags.IsSet(flagOpenURL),
+		OpenURL: func() string {
+			if u := commandFlags.String(flagOpenURL); u != "" {
+				return u
+			}
+			return defaultOpenURL
+		}(),
+		OpenURLExplicit: commandFlags.IsSet(flagOpenURL),
+	}
+
+	if options.Redact && options.RedactComplete {
+		return nil, nil, &InvalidUsageError{
+			message: "Error: flags '--redact' and '--redact-complete' are mutually exclusive",
+		}
+	}
+
+	if options.Open && options.NoDownload {
+		return nil, nil, &InvalidUsageError{
+			message: "Error: flag '--open' requires a local file and cannot be used with '--no-download'",
+		}
 	}
 
 	return options, commandFlags.Args(), nil
@@ -361,18 +445,73 @@ func (c *JavaPlugin) generateOptionsMapFromFlags() map[string]string {
 
 	// Generate options from the centralized flag definitions
 	for _, flagDef := range flagDefinitions {
-		// Create the prefix for the flag (short name with appropriate formatting)
-		prefix := "-" + flagDef.ShortName
-		if flagDef.Name == "app-instance-index" {
-			prefix += " [index]"
+		var prefix string
+		if flagDef.ShortName != "" {
+			prefix = "-" + flagDef.ShortName
+			if flagDef.Name == "app-instance-index" {
+				prefix += " [index]"
+			}
+			prefix += ", "
 		}
-		prefix += ", "
 
-		// Use the Description field for detailed help text
-		options[flagDef.Name] = utils.WrapTextWithPrefix(flagDef.Description, prefix, 80, 27)
+		// Use the Description field for detailed help text.
+		// miscLineIndent aligns continuation lines: prefix + indent must equal the
+		// widest prefix used ("-i [index], " = 12 chars, indent 19 → total 31).
+		indent := 31 - len(prefix)
+		if indent < 0 {
+			indent = 0
+		}
+		options[flagDef.Name] = utils.WrapTextWithPrefix(flagDef.Description, prefix, 80, indent)
 	}
 
 	return options
+}
+
+func (c *JavaPlugin) buildJstallArgs(command *Command, applicationName string, arguments []string, options *Options) (string, error) {
+	argumentLen := len(arguments)
+	jstallArgs := options.Args
+
+	switch {
+	case command.SSHCommand == "@ARGS":
+		// Generic jstall passthrough: default to 'status all' if no --args provided.
+		if options.Args == "" {
+			jstallArgs = "status all"
+		}
+	case command.AcceptsTrailingArgs:
+		// Commands like record-status: the trailing positional argument is the output file,
+		// while --args contains any extra JStall flags.
+		if argumentLen > 3 {
+			return "", &InvalidUsageError{message: fmt.Sprintf("%s accepts at most one trailing argument (output file), got %d", command.Name, argumentLen-2)}
+		}
+
+		trailingArg := ""
+		if argumentLen > 2 {
+			trailingArg = arguments[2]
+			if strings.TrimSpace(trailingArg) == "" {
+				return "", &InvalidUsageError{message: fmt.Sprintf("%s trailing argument must not be empty", command.Name)}
+			}
+		}
+		if trailingArg == "" {
+			trailingArg = applicationName + "-status.zip"
+		}
+
+		jstallArgs = strings.ReplaceAll(command.SSHCommand, "@ARGS", trailingArg)
+		if options.Args != "" {
+			jstallArgs += " " + options.Args
+		}
+	default:
+		// Templated commands like status: replace @ARGS with the provided value.
+		jstallArgs = strings.ReplaceAll(command.SSHCommand, "@ARGS", options.Args)
+		jstallArgs = strings.TrimRight(jstallArgs, " ")
+	}
+
+	if options.Full && !strings.Contains(jstallArgs, "--full") {
+		// Only add --full when it is not already present to avoid duplication.
+		jstallArgs += " --full"
+		jstallArgs = strings.TrimLeft(jstallArgs, " ")
+	}
+
+	return jstallArgs, nil
 }
 
 const (
@@ -386,6 +525,39 @@ const (
 	cat  # fallback: just pass through the input unchanged
   fi
 };`
+
+	// AttachSocketNCHelper defines a shell function `nc_jcmd PID CMDLINE...` that sends one
+	// HotSpot attach-protocol request to the JVM's Unix-domain socket via nc.
+	// This is the same protocol jcmd uses internally (JDK 9+) and works on JRE-only containers.
+	// Socket location: /tmp/.java_pid<PID> (Linux) or ${TMPDIR%/}/.java_pid<PID> (macOS).
+	// If the socket does not exist yet, it is triggered via the standard attach handshake
+	// (write .attach_pid<PID> into the JVM's cwd and send SIGQUIT), then polled for 5 s.
+	// Requires nc with -U support (netcat-openbsd or nmap-ncat).
+	//
+	// Protocol: the entire command line (command + args) goes in the first field, NUL-separated:
+	//   printf '1\0jcmd\0GC.heap_dump /tmp/out.hprof\0\0\0'
+	// Subsequent fields are unused by HotSpot; the JVM splits the first field on spaces.
+	AttachSocketNCHelper = `nc_jcmd() {
+  _pid=$1; shift; _cmdline="$*"
+  _sock=$(if [ -S "/tmp/.java_pid${_pid}" ]; then echo "/tmp/.java_pid${_pid}"; \
+          elif [ -n "$TMPDIR" ] && [ -S "${TMPDIR%/}/.java_pid${_pid}" ]; then echo "${TMPDIR%/}/.java_pid${_pid}"; fi)
+  if [ -z "$_sock" ]; then
+    _cwd=$(readlink /proc/${_pid}/cwd 2>/dev/null || echo /tmp)
+    touch "${_cwd}/.attach_pid${_pid}" 2>/dev/null; kill -QUIT "${_pid}" 2>/dev/null
+    for _i in 1 2 3 4 5 6 7 8 9 10; do sleep 0.5
+      _sock=$(if [ -S "/tmp/.java_pid${_pid}" ]; then echo "/tmp/.java_pid${_pid}"; \
+              elif [ -n "$TMPDIR" ] && [ -S "${TMPDIR%/}/.java_pid${_pid}" ]; then echo "${TMPDIR%/}/.java_pid${_pid}"; fi)
+      [ -n "$_sock" ] && break
+    done
+  fi
+  [ -z "$_sock" ] && { echo >&2 "nc_jcmd: attach socket not found for PID ${_pid}"; return 1; }
+  _raw=$(printf '1\0jcmd\0%s\0\0\0' "$_cmdline" | nc -w 2 -U "$_sock" 2>/dev/null)
+  _rc=$(echo "$_raw" | head -n 1)
+  _body=$(echo "$_raw" | tail -n +2)
+  if [ "$_rc" != "0" ]; then echo >&2 "nc_jcmd: command '$_cmdline' failed (rc=$_rc): $_body"; return 1; fi
+  echo "$_body"
+};
+nc_available() { command -v nc >/dev/null 2>&1 && nc -h 2>&1 | grep -q '\-U'; };`
 )
 
 // Run must be implemented by any plugin because it is part of the
@@ -516,10 +688,10 @@ func (c *JavaPlugin) replaceVariables(command, appName, fspath, fileName, static
 
 var commands = []Command{
 	{
-		Name:          "heap-dump",
+		Name:          cmdHeapDump,
 		Description:   "Generate a heap dump from a running Java application",
 		GenerateFiles: true,
-		FileExtension: ".hprof",
+		FileExtension: extHprof,
 		/*
 					If there is not enough space on the filesystem to write the dump, jmap will create a file
 			with size 0, output something about not enough space left on the device, and exit with status code 0.
@@ -530,37 +702,37 @@ var commands = []Command{
 
 			OpenJDK: Wrap everything in an if statement in case jmap is available
 		*/
-		SSHCommand: `if [ -f @FILE_NAME ]; then echo >&2 'Heap dump @FILE_NAME already exists'; exit 1; fi
+		SSHCommand: AttachSocketNCHelper + `if [ -f @FILE_NAME ]; then echo >&2 'Heap dump @FILE_NAME already exists'; exit 1; fi
 JMAP_COMMAND=$(find -executable -name jmap | head -1 | tr -d [:space:])
 # SAP JVM: Wrap everything in an if statement in case jvmmon is available
 JVMMON_COMMAND=$(find -executable -name jvmmon | head -1 | tr -d [:space:])
-# if we have neither jmap nor jvmmon, we cannot generate a heap dump and should exit with an error
-if [ -z "${JMAP_COMMAND}" ] && [ -z "${JVMMON_COMMAND}" ]; then
-  echo >&2 "jvmmon or jmap are required for generating heap dump, you can modify your application manifest.yaml on the 'JBP_CONFIG_OPEN_JDK_JRE' environment variable. This could be done like this:
-		---
-		applications:
-		- name: <APP_NAME>
-		  memory: 1G
-		  path: <PATH_TO_BUILD_ARTIFACT>
-		  buildpack: https://github.com/cloudfoundry/java-buildpack
-		  env:
-			JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/jammy/x86_64", version: 21.+ } }'
-		
-	"
-  exit 1
-fi
+_pid=$(pidof java)
 if [ -n "${JMAP_COMMAND}" ]; then
-OUTPUT=$( ${JMAP_COMMAND} -dump:format=b,file=@FILE_NAME $(pidof java) ) || STATUS_CODE=$?
+GZ_ARG=""
+if ${JMAP_COMMAND} -h 2>&1 | grep -q "gz="; then GZ_ARG=",gz=1"; fi
+OUTPUT=$( ${JMAP_COMMAND} -dump:format=b${GZ_ARG},file=@FILE_NAME ${_pid} ) || STATUS_CODE=$?
 if [ ! -s @FILE_NAME ]; then echo >&2 ${OUTPUT}; exit 1; fi
 if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi
 elif [ -n "${JVMMON_COMMAND}" ]; then
-echo -e 'change command line flag flags=-XX:HeapDumpOnDemandPath=@FSPATH\ndump heap' > setHeapDumpOnDemandPath.sh
-OUTPUT=$( ${JVMMON_COMMAND} -pid $(pidof java) -cmd "setHeapDumpOnDemandPath.sh" ) || STATUS_CODE=$?
+echo -e 'change command line flag flags=-XX:HeapDumpOnDemandPath=@FSPATH\ndump heap' > @FSPATH/setHeapDumpOnDemandPath.sh
+OUTPUT=$( ${JVMMON_COMMAND} -pid ${_pid} -cmd "@FSPATH/setHeapDumpOnDemandPath.sh" ) || STATUS_CODE=$?
+rm -f @FSPATH/setHeapDumpOnDemandPath.sh
 sleep 5 # Writing the heap dump is triggered asynchronously -> give the JVM some time to create the file
 HEAP_DUMP_NAME=$(find @FSPATH -name 'java_pid*.hprof' -printf '%T@ %p\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\0' '\n' | head -n 1)
 SIZE=-1; OLD_SIZE=$(stat -c '%s' "${HEAP_DUMP_NAME}"); while [ ${SIZE} != ${OLD_SIZE} ]; do OLD_SIZE=${SIZE}; sleep 3; SIZE=$(stat -c '%s' "${HEAP_DUMP_NAME}"); done
 if [ ! -s "${HEAP_DUMP_NAME}" ]; then echo >&2 ${OUTPUT}; exit 1; fi
 if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi
+if [ -n "@COMPRESS_FLAG" ]; then gzip -1 "${HEAP_DUMP_NAME}" && HEAP_DUMP_NAME="${HEAP_DUMP_NAME}.gz"; fi
+elif nc_available; then
+nc_jcmd ${_pid} GC.heap_dump @FILE_NAME || exit 1
+if [ ! -s @FILE_NAME ]; then echo >&2 "Heap dump file not created or empty"; exit 1; fi
+else
+  echo >&2 "jvmmon, jmap, or nc (netcat-openbsd / nmap-ncat) are required for generating a heap dump.
+To use a JDK image, set JBP_CONFIG_OPEN_JDK_JRE in your manifest.yaml:
+  env:
+    JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: \"https://java-buildpack.cloudfoundry.org/openjdk-jdk/jammy/x86_64\", version: 21.+ } }'
+Or install netcat on the container (apt-get install netcat-openbsd)."
+  exit 1
 fi`,
 		FileLabel:    "heap dump",
 		FileNamePart: "heapdump",
@@ -569,40 +741,43 @@ fi`,
 		Name:          "thread-dump",
 		Description:   "Generate a thread dump from a running Java application",
 		GenerateFiles: false,
-		SSHCommand: `JSTACK_COMMAND=$(find -executable -name jstack | head -1);
-		JVMMON_COMMAND=$(find -executable -name jvmmon | head -1) 
-		if [ -z "${JVMMON_COMMAND}" ] && [ -z "${JSTACK_COMMAND}" ]; then
-		echo >&2 "jstack or jvmmon are required for generating thread dump, you can modify your application manifest.yaml on the 'JBP_CONFIG_OPEN_JDK_JRE' environment variable. This could be done like this:
-				---
-				applications:
-				- name: <APP_NAME>
-				memory: 1G
-				path: <PATH_TO_BUILD_ARTIFACT>
-				buildpack: https://github.com/cloudfoundry/java-buildpack
-				env:
-					JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: "https://java-buildpack.cloudfoundry.org/openjdk-jdk/jammy/x86_64", version: 21.+ } }'
-				
-			"
-		exit 1
-		fi
-		if [ -n \"${JSTACK_COMMAND}\" ]; then ${JSTACK_COMMAND} $(pidof java); exit 0; fi;
-		if [ -n \"${JVMMON_COMMAND}\" ]; then ${JVMMON_COMMAND} -pid $(pidof java) -c \"print stacktrace\"; fi`,
+		SSHCommand: AttachSocketNCHelper + `
+JSTACK_COMMAND=$(find -executable -name jstack | head -1);
+JVMMON_COMMAND=$(find -executable -name jvmmon | head -1)
+_pid=$(pidof java)
+if [ -n "${JSTACK_COMMAND}" ]; then ${JSTACK_COMMAND} ${_pid}; exit 0; fi
+if [ -n "${JVMMON_COMMAND}" ]; then ${JVMMON_COMMAND} -pid ${_pid} -c "print stacktrace"; exit 0; fi
+if nc_available; then nc_jcmd ${_pid} Thread.print; exit 0; fi
+echo >&2 "jstack, jvmmon, or nc (netcat-openbsd / nmap-ncat) are required for generating a thread dump.
+To use a JDK image, set JBP_CONFIG_OPEN_JDK_JRE in your manifest.yaml:
+  env:
+    JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { repository_root: \"https://java-buildpack.cloudfoundry.org/openjdk-jdk/jammy/x86_64\", version: 21.+ } }'
+Or install netcat on the container (apt-get install netcat-openbsd)."
+exit 1`,
 	},
 	{
 		Name:          "vm-info",
 		Description:   "Print information about the Java Virtual Machine running a Java application",
-		RequiredTools: []string{toolJcmd},
 		GenerateFiles: false,
-		SSHCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) VM.info | filter_jcmd_remote_message`,
+		SSHCommand: AttachSocketNCHelper + FilterJCMDRemoteMessage + `
+_pid=$(pidof java)
+JCMD_COMMAND=$(find -executable -name jcmd | head -1)
+if [ -n "${JCMD_COMMAND}" ]; then ${JCMD_COMMAND} ${_pid} VM.info | filter_jcmd_remote_message; exit 0; fi
+if nc_available; then nc_jcmd ${_pid} VM.info; exit 0; fi
+echo >&2 "jcmd not found. Install netcat (netcat-openbsd / nmap-ncat) for JRE-only containers."; exit 1`,
 	},
 	{
 		Name:                             toolJcmd,
 		Description:                      "Run a JCMD command on a running Java application via --args, downloads and deletes all files that are created in the current folder, use '--no-download' to prevent this. Environment variables available: @FSPATH (writable directory path, always set), @ARGS (command arguments), @APP_NAME (application name), @FILE_NAME (generated filename with UUID for file operations), and @STATIC_FILE_NAME (without UUID). Use single quotes around --args to prevent shell expansion.",
-		RequiredTools:                    []string{toolJcmd},
+		RequiredTools:                    []string{},
 		GenerateFiles:                    false,
 		GenerateArbitraryFiles:           true,
 		GenerateArbitraryFilesFolderName: toolJcmd,
-		SSHCommand:                       FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) @ARGS | filter_jcmd_remote_message`,
+		SSHCommand: AttachSocketNCHelper + FilterJCMDRemoteMessage + `_pid=$(pidof java)
+JCMD_COMMAND=$(find -executable -name jcmd | head -1)
+if [ -n "${JCMD_COMMAND}" ]; then ${JCMD_COMMAND} ${_pid} @ARGS | filter_jcmd_remote_message; exit 0; fi
+if nc_available; then nc_jcmd ${_pid} @ARGS; exit 0; fi
+echo >&2 "jcmd not found. Install netcat (netcat-openbsd / nmap-ncat) for JRE-only containers."; exit 1`,
 	},
 	{
 		Name:          "jfr-start",
@@ -701,12 +876,16 @@ fi`,
 	{
 		Name:          "vm-version",
 		Description:   "Print the version of the Java Virtual Machine running a Java application",
-		RequiredTools: []string{toolJcmd},
 		GenerateFiles: false,
-		SSHCommand:    FilterJCMDRemoteMessage + `$JCMD_COMMAND $(pidof java) VM.version | filter_jcmd_remote_message`,
+		SSHCommand: AttachSocketNCHelper + FilterJCMDRemoteMessage + `
+_pid=$(pidof java)
+JCMD_COMMAND=$(find -executable -name jcmd | head -1)
+if [ -n "${JCMD_COMMAND}" ]; then ${JCMD_COMMAND} ${_pid} VM.version | filter_jcmd_remote_message; exit 0; fi
+if nc_available; then nc_jcmd ${_pid} VM.version; exit 0; fi
+echo >&2 "jcmd not found. Install netcat (netcat-openbsd / nmap-ncat) for JRE-only containers."; exit 1`,
 	},
 	{
-		Name:          "vm-vitals",
+		Name:          cmdVmVitals,
 		Description:   "Print vital statistics about the Java Virtual Machine running a Java application",
 		RequiredTools: []string{toolJcmd},
 		GenerateFiles: false,
@@ -809,460 +988,713 @@ fi`,
 	},
 }
 
-func (c *JavaPlugin) execute(_ plugin.CliConnection, args []string) (string, error) {
-	if len(args) == 0 {
-		return "", &InvalidUsageError{message: "No command provided"}
-	}
+// commandContext bundles everything that is resolved once per `cf java` invocation
+// and is then shared by the remote-execution, download and cleanup phases.
+type commandContext struct {
+	command         *Command
+	options         *Options
+	applicationName string
+	// cfSSHArguments is the `cf ssh` prefix *without* a trailing --command. Use
+	// sshArgs() to obtain a ready-to-use argument slice.
+	cfSSHArguments []string
+	remoteDir      string
+	localDir       string
 
+	// noDownload may be stricter than options.NoDownload: `asprof start ...` only
+	// arms the profiler, so there is no file to fetch yet.
+	noDownload bool
+	// keepAfterDownload reflects the effective noDownload: nothing fetched means
+	// nothing may be deleted in the container.
+	keepAfterDownload bool
+
+	// Remote filesystem layout, populated by prepareRemotePaths.
+	fspath         string
+	fileExt        string
+	fileName       string
+	staticFileName string
+}
+
+// sshArgs returns a fresh `cf ssh` argument slice terminated by --command, ready for
+// a remote command to be appended. Every call allocates, because the utils helpers
+// append to the slice they are given; sharing one backing array between them would
+// let overlapping invocations overwrite each other's remote command.
+func (ctx *commandContext) sshArgs() []string {
+	args := make([]string, 0, len(ctx.cfSSHArguments)+2)
+	args = append(args, ctx.cfSSHArguments...)
+	return append(args, "--command")
+}
+
+// handleCLILifecycle deals with the lifecycle messages the CF CLI sends and rejects
+// invocations that are not `cf java ...`. handled=true means execute must return
+// immediately with the returned error.
+func handleCLILifecycle(args []string) (handled bool, err error) {
+	if len(args) == 0 {
+		return true, &InvalidUsageError{message: "No command provided"}
+	}
 	switch args[0] {
 	case "CLI-MESSAGE-UNINSTALL":
 		// Nothing to uninstall, we keep no local state
-		return "", nil
+		return true, nil
 	case cmdJava:
-		break
+		return false, nil
 	default:
-		return "", &InvalidUsageError{message: fmt.Sprintf("Unexpected command Name '%s' (expected : 'java')", args[0])}
+		return true, &InvalidUsageError{message: fmt.Sprintf("Unexpected command Name '%s' (expected : 'java')", args[0])}
+	}
+}
+
+// resolveLocalDir defaults to the current directory, expands a leading `~` and
+// rejects path traversal sequences.
+func resolveLocalDir(localDir string) (string, error) {
+	if localDir == "" {
+		return ".", nil
+	}
+	if localDir == "~" || strings.HasPrefix(localDir, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			localDir = home + localDir[1:]
+		}
+	}
+	for _, part := range strings.Split(filepath.Clean(localDir), string(filepath.Separator)) {
+		if part == ".." {
+			return "", &InvalidUsageError{message: "Error: --local-dir must not contain path traversal sequences (..)"}
+		}
+	}
+	return localDir, nil
+}
+
+func showPluginHelp() error {
+	if err := exec.Command("cf", "help", cmdJava).Run(); err != nil {
+		return fmt.Errorf("failed to show help: %w", err)
+	}
+	return nil
+}
+
+// findCommand resolves a subcommand by name, or returns a helpful usage error.
+func findCommand(cliConnection plugin.CliConnection, arguments []string) (*Command, error) {
+	name := strings.ToLower(arguments[0])
+	for i := range commands {
+		if commands[i].Name == name {
+			return &commands[i], nil
+		}
+	}
+	return nil, unknownCommandError(cliConnection, arguments)
+}
+
+func unknownCommandError(cliConnection plugin.CliConnection, arguments []string) error {
+	commandName := arguments[0]
+
+	// Detect swapped order: cf java MY-APP heap-dump instead of cf java heap-dump MY-APP
+	if len(arguments) >= 2 && cliConnection != nil {
+		secondArg := strings.ToLower(arguments[1])
+		for _, cmd := range commands {
+			if cmd.Name == secondArg {
+				// Confirm the first arg looks like an app name via CF API.
+				if _, appErr := cliConnection.GetApp(commandName); appErr == nil {
+					return &InvalidUsageError{message: fmt.Sprintf("Did you mean: cf java %s %s? (app and command appear to be swapped)", secondArg, commandName)}
+				}
+				break
+			}
+		}
+	}
+
+	avCommands := make([]string, 0, len(commands))
+	for _, cmd := range commands {
+		avCommands = append(avCommands, cmd.Name)
+	}
+	matches := utils.FuzzySearch(strings.ToLower(commandName), avCommands, 3)
+	return &InvalidUsageError{message: fmt.Sprintf("Unrecognized command %q, did you mean: %s?", commandName, utils.JoinWithOr(matches))}
+}
+
+func unsupportedFlagError(flag, commandName string) error {
+	return &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for %s", flag, commandName)}
+}
+
+// warnAboutHeapDumpOnlyFlags warns about heap-dump-only flags used on other commands.
+func warnAboutHeapDumpOnlyFlags(command *Command, options *Options) {
+	if command.Name == cmdHeapDump {
+		return
+	}
+	heapOnlyFlags := []struct {
+		set  bool
+		name string
+	}{
+		{options.Redact, flagRedact},
+		{options.RedactComplete, flagRedactComplete},
+		{options.Compress, flagCompress},
+		{options.Open, flagOpen},
+		{options.OpenURLExplicit, flagOpenURL},
+	}
+	for _, f := range heapOnlyFlags {
+		if f.set {
+			fmt.Fprintf(os.Stderr, "Warning: flag '--%s' is only supported by heap-dump and has no effect here.\n", f.name)
+		}
+	}
+}
+
+func hasHelpFlag(arguments []string) bool {
+	for _, arg := range arguments {
+		if arg == "--help" || arg == "-h" {
+			return true
+		}
+	}
+	return false
+}
+
+// validateInvocation rejects unsupported flag/argument combinations. The order of
+// the checks is significant: it decides which error a user sees when several apply.
+func validateInvocation(command *Command, options *Options, arguments []string, localDir string) error {
+	if !command.GenerateFiles && !command.GenerateArbitraryFiles {
+		switch {
+		case options.ContainerDir != "":
+			return unsupportedFlagError(flagContainerDir, command.Name)
+		case options.LocalDir != "":
+			return unsupportedFlagError(flagLocalDir, command.Name)
+		case options.Keep:
+			return unsupportedFlagError(flagKeep, command.Name)
+		case options.NoDownload:
+			return unsupportedFlagError(flagNoDownload, command.Name)
+		}
+	}
+
+	if !command.HasMiscArgs() && options.Args != "" {
+		return unsupportedFlagError("args", command.Name)
+	}
+	if options.Args != "" && strings.TrimSpace(options.Args) == "" {
+		return &InvalidUsageError{message: "Error: --args must not be empty or whitespace-only"}
+	}
+	if command.HasMiscArgs() && options.Args == "" && (command.Name == toolJcmd || command.Name == toolAsprof) {
+		return &InvalidUsageError{message: fmt.Sprintf("The command %q requires the --args flag to be set. Use 'cf java %s --help' for usage information.", command.Name, command.Name)}
+	}
+	if options.Full && !command.SupportFullOption {
+		return unsupportedFlagError("full", command.Name)
+	}
+
+	switch {
+	case len(arguments) == 1:
+		return &InvalidUsageError{message: "No application name provided"}
+	case len(arguments) > 2 && !command.AcceptsTrailingArgs:
+		return &InvalidUsageError{message: fmt.Sprintf("Too many arguments provided: %v", strings.Join(arguments[2:], ", "))}
+	}
+
+	// Validate --local-dir exists (catches errors early, including during dry-run)
+	if options.LocalDir != "" && (command.GenerateFiles || command.GenerateArbitraryFiles) {
+		if _, statErr := os.Stat(localDir); os.IsNotExist(statErr) {
+			return &InvalidUsageError{message: fmt.Sprintf("Error: --local-dir %q does not exist", localDir)}
+		}
+	}
+
+	// Indexes can't be negative (except -1 for "not set"), so fail with an error.
+	if options.AppInstanceIndex < -1 {
+		return &InvalidUsageError{message: fmt.Sprintf("Invalid application instance index %d, must be >= 0", options.AppInstanceIndex)}
+	}
+	return nil
+}
+
+// resolveDownloadBehavior decides whether the download and cleanup phases run.
+func resolveDownloadBehavior(command *Command, options *Options) (noDownload, keepAfterDownload bool) {
+	noDownload = options.NoDownload
+
+	// `asprof start ...` only arms the profiler; the recording is written later by
+	// `asprof stop`, so there is nothing to fetch yet.
+	if command.Name == toolAsprof && isAsprofStartArgs(options.Args) {
+		noDownload = true
+	}
+
+	// If nothing is downloaded, the container copy is the only copy: never delete it.
+	keepAfterDownload = options.Keep || noDownload
+	return noDownload, keepAfterDownload
+}
+
+// isAsprofStartArgs reports whether --args invokes async-profiler's `start`
+// subcommand, i.e. "start" on its own or "start <options...>".
+func isAsprofStartArgs(args string) bool {
+	trimmed := strings.TrimSpace(args)
+	return trimmed == "start" || strings.HasPrefix(trimmed, "start ")
+}
+
+func buildSSHArguments(applicationName string, appInstanceIndex int) []string {
+	args := []string{cmdSSH, applicationName}
+	if appInstanceIndex >= 0 {
+		args = append(args, "--app-instance-index", strconv.Itoa(appInstanceIndex))
+	}
+	return args
+}
+
+// prepareRemotePaths resolves the writable directory in the container and the file
+// names the command will produce there.
+func (c *JavaPlugin) prepareRemotePaths(ctx *commandContext) error {
+	ctx.fspath = ctx.remoteDir
+	ctx.fileExt = ctx.command.FileExtension
+	if ctx.command.Name == cmdHeapDump && ctx.options.Compress {
+		// jmap always writes a .hprof file on the container; only jvmmon may produce a .hprof.gz file
+		ctx.fileExt = extHprof
+	}
+
+	// Fail before touching the container: the extension is static command metadata,
+	// so an unsupported one is a plugin bug and must not depend on --no-download.
+	if ctx.command.GenerateFiles && !isLocatableFileExtension(ctx.fileExt) {
+		return &InvalidUsageError{message: fmt.Sprintf("Unsupported file extension %q", ctx.fileExt)}
+	}
+
+	if !ctx.command.GenerateFiles && !ctx.command.NeedsFileName && !ctx.command.GenerateArbitraryFiles {
+		return nil
+	}
+
+	if ctx.options.DryRun {
+		// Dry-run cannot discover volume mounts without contacting CF; use the
+		// supplied container directory or an offline placeholder.
+		if ctx.fspath == "" {
+			ctx.fspath = "/tmp"
+		}
+	} else {
+		path, err := utils.GetAvailablePath(ctx.applicationName, ctx.remoteDir)
+		if err != nil {
+			return fmt.Errorf("failed to get available path: %w", err)
+		}
+		if path == "" {
+			return fmt.Errorf("no available path found for file generation")
+		}
+		ctx.fspath = path
+	}
+
+	if ctx.command.GenerateArbitraryFiles {
+		ctx.fspath += "/" + ctx.command.GenerateArbitraryFilesFolderName
+	}
+
+	namePart := ""
+	if ctx.command.FileNamePart != "" {
+		namePart = "-" + ctx.command.FileNamePart
+	}
+	base := ctx.fspath + "/" + ctx.applicationName + namePart
+	ctx.fileName = base + "-" + utils.GenerateUUID() + ctx.fileExt
+	ctx.staticFileName = base + ctx.fileExt
+	c.logVerbosef("Remote path: %s, file: %s", ctx.fspath, ctx.fileName)
+	return nil
+}
+
+// toolResolutionTokens emits the shell snippets that locate the required JDK tools
+// inside the container and export them as $<TOOL>_COMMAND.
+func toolResolutionTokens(requiredTools []string) []string {
+	var tokens []string
+	for _, tool := range requiredTools {
+		upper := strings.ToUpper(tool)
+		tokens = append(tokens, fmt.Sprintf(`%[1]s_TOOL_PATH=$(find -executable -name %[2]s | head -1 | tr -d [:space:]); if [ -z "$%[1]s_TOOL_PATH" ]; then echo "%[2]s not found"; exit 1; fi; %[1]s_COMMAND=$(realpath "$%[1]s_TOOL_PATH")`, upper, tool))
+		if tool == toolJcmd {
+			// Prefer `asprof jcmd` over plain `jcmd` when async-profiler is present.
+			tokens = append(tokens, `ASPROF_COMMAND=$(realpath $(find -executable -name asprof | head -1 | tr -d [:space:])); if [ -n "${ASPROF_COMMAND}" ]; then JCMD_COMMAND="${ASPROF_COMMAND} jcmd"; fi`)
+		}
+	}
+	return tokens
+}
+
+// buildRemoteCommand assembles the single shell command that runs in the container.
+func (c *JavaPlugin) buildRemoteCommand(ctx *commandContext) (string, error) {
+	tokens := []string{JavaDetectionCommand}
+	tokens = append(tokens, toolResolutionTokens(ctx.command.RequiredTools)...)
+
+	commandText := ctx.command.SSHCommand
+	// Expand @COMPRESS_FLAG for jvmmon path in heap-dump (jmap uses shell-level gz probe)
+	if ctx.command.Name == cmdHeapDump {
+		compressFlag := ""
+		if ctx.options.Compress {
+			compressFlag = "1"
+		}
+		commandText = strings.ReplaceAll(commandText, "@COMPRESS_FLAG", compressFlag)
+	}
+
+	commandText, err := c.replaceVariables(commandText, ctx.applicationName, ctx.fspath, ctx.fileName, ctx.staticFileName, ctx.options.Args)
+	if err != nil {
+		return "", fmt.Errorf("variable replacement failed: %w", err)
+	}
+
+	if ctx.command.GenerateArbitraryFiles {
+		// Arbitrary-file commands run inside their own subfolder so the plugin knows
+		// exactly which files to collect afterwards.
+		tokens = append(tokens, `mkdir -p "`+ctx.fspath+`"`, `cd "`+ctx.fspath+`"`, commandText)
+	} else {
+		tokens = append(tokens, commandText)
+	}
+
+	remoteCommand := strings.Join(tokens, "; ")
+	c.logVerbosef("Final remote command: %s", remoteCommand)
+	return remoteCommand, nil
+}
+
+// dryRunCommandLine renders the `cf ssh` invocation that would have been executed.
+func dryRunCommandLine(ctx *commandContext, remoteCommand string) string {
+	// The remote command is wrapped in single quotes so that copy-pasting it does not
+	// make the local shell execute it.
+	escaped := strings.ReplaceAll(remoteCommand, "'", `'\''`)
+	args := append(ctx.sshArgs(), "'"+escaped+"'")
+	return "cf " + strings.Join(args, " ")
+}
+
+// runRemoteCommand executes the command over `cf ssh` and maps failures onto
+// user-facing error messages.
+func (c *JavaPlugin) runRemoteCommand(ctx *commandContext, remoteCommand string) (string, error) {
+	fullCommand := append(ctx.sshArgs(), remoteCommand)
+	c.logVerbosef("Executing command: %v", fullCommand)
+
+	outputBytes, err := exec.Command("cf", fullCommand...).CombinedOutput()
+	output := strings.TrimRight(string(outputBytes), "\n")
+	if err == nil {
+		return output, nil
+	}
+
+	switch {
+	case isSSHConnectivityError(output, err):
+		return "", fmt.Errorf("%s", wrapSSHError(ctx.applicationName, output, err))
+	case err.Error() == "unexpected EOF":
+		return "", fmt.Errorf("Command failed")
+	case len(output) == 0:
+		return "", fmt.Errorf("Command execution failed: %w", err)
+	default:
+		return "", fmt.Errorf("Command execution failed: %w\nOutput: %s", err, output)
+	}
+}
+
+// isLocatableFileExtension reports whether collectGeneratedFile knows how to find a
+// file with this extension in the container.
+func isLocatableFileExtension(ext string) bool {
+	switch ext {
+	case extHprof, extHprofGz, extJFR:
+		return true
+	default:
+		return false
+	}
+}
+
+// collectGeneratedFile locates the file the command produced in the container and
+// updates ctx.fileName with the real name. prepareRemotePaths has already rejected
+// extensions this function cannot handle.
+func (c *JavaPlugin) collectGeneratedFile(ctx *commandContext) error {
+	var (
+		finalFile string
+		err       error
+	)
+	namePrefix := ctx.applicationName + "-" + ctx.command.FileNamePart
+
+	switch ctx.fileExt {
+	case extHprofGz:
+		finalFile, err = utils.FindHeapDumpGzFile(ctx.sshArgs(), ctx.fileName, ctx.fspath, namePrefix)
+	case extJFR:
+		finalFile, err = utils.FindJFRFile(ctx.sshArgs(), ctx.fileName, ctx.fspath, namePrefix)
+	default:
+		finalFile, err = utils.FindHeapDumpFile(ctx.sshArgs(), ctx.fileName, ctx.fspath, namePrefix)
+	}
+
+	if err == nil && finalFile != "" {
+		ctx.fileName = finalFile
+		fmt.Println("Successfully created " + ctx.command.FileLabel + " in application container at: " + ctx.fileName)
+		return nil
+	}
+	if ctx.noDownload {
+		// Nothing is going to be fetched, so a missing file is not fatal here.
+		return nil
+	}
+
+	fmt.Println("Failed to find " + ctx.command.FileLabel + " in application container")
+	if err == nil {
+		err = fmt.Errorf("failed to find %s in application container", ctx.command.FileLabel)
+	}
+	return err
+}
+
+// downloadGeneratedFile transfers the generated file to the local machine, applying
+// gzip handling and redaction where requested.
+func (c *JavaPlugin) downloadGeneratedFile(ctx *commandContext) error {
+	isHeapDump := ctx.command.Name == cmdHeapDump
+	localFileExt := ctx.fileExt
+	remoteIsGz := false
+
+	// For heap-dump via jmap: probe whether the remote file is gzip-compressed.
+	// jmap writes a .hprof filename but may fill it with gzip content when gz=1 is supported.
+	if isHeapDump && ctx.fileExt == extHprof {
+		remoteIsGz, _ = utils.ProbeRemoteFileGzip(ctx.sshArgs(), ctx.fileName)
+		c.logVerbosef("Remote file is gzip-compressed: %t", remoteIsGz)
+		switch {
+		case remoteIsGz && ctx.options.Compress:
+			// User asked for .hprof.gz locally -> keep compressed
+			localFileExt = extHprofGz
+		case !remoteIsGz && ctx.options.Compress:
+			fmt.Fprintf(os.Stderr, "Warning: remote jmap does not support gz compression (JDK 17+ required); downloading uncompressed\n")
+		}
+	}
+
+	localPath := ctx.localDir + "/" + ctx.applicationName + "-" + ctx.command.FileNamePart + "-" + utils.GenerateUUID() + localFileExt
+	c.logVerbosef("Downloading file to: %s", localPath)
+
+	redacting := isHeapDump && (ctx.options.Redact || ctx.options.RedactComplete)
+	needsGunzip := isHeapDump && remoteIsGz && localFileExt == extHprof
+
+	if needsGunzip && !redacting {
+		fmt.Println("Note: remote jmap used gz compression; decompressing during transfer...")
+	}
+	if redacting {
+		return c.downloadRedactedHeapDump(ctx, localPath, remoteIsGz)
+	}
+	return c.downloadPlainFile(ctx, localPath, needsGunzip)
+}
+
+// downloadRedactedHeapDump streams the heap dump through hprof-redact instead of
+// writing the raw dump to disk.
+func (c *JavaPlugin) downloadRedactedHeapDump(ctx *commandContext, localPath string, remoteIsGz bool) error {
+	mode := "lean"
+	if ctx.options.RedactComplete {
+		mode = "complete"
+	}
+	redactBin, err := ensureHprofRedact()
+	if err != nil {
+		return fmt.Errorf("hprof-redact unavailable: %w", err)
+	}
+
+	reader, waitRemote, err := utils.StreamOverCat(ctx.sshArgs(), ctx.fileName)
+	if err != nil {
+		return err
+	}
+	stream := reader
+	if remoteIsGz {
+		// Remote jmap used gz=1; decompress before passing to hprof-redact
+		// which expects uncompressed HPROF format.
+		gz, gzErr := gzip.NewReader(stream)
+		if gzErr != nil {
+			_ = stream.Close()
+			_ = waitRemote()
+			return fmt.Errorf("gzip header error on remote heap dump: %w", gzErr)
+		}
+		stream = gz
+	}
+
+	finalPath, redactErr := pipeHeapDumpThroughRedact(redactBin, stream, localPath, mode, ctx.options.RedactKeepOnError)
+	closeErr := stream.Close()
+	waitErr := waitRemote()
+	if redactErr != nil {
+		return combineHeapDumpStreamErrors(redactErr, closeErr, waitErr)
+	}
+	if combinedErr := combineHeapDumpStreamErrors(nil, closeErr, waitErr); combinedErr != nil {
+		return combinedErr
+	}
+
+	c.logVerbosef("Redacted heap dump stream completed successfully")
+	fmt.Println("Redacted heap dump saved to: " + finalPath)
+	return c.openHeapDumpIfRequested(ctx, finalPath)
+}
+
+// downloadPlainFile copies the remote file verbatim, optionally gunzipping in flight.
+func (c *JavaPlugin) downloadPlainFile(ctx *commandContext, localPath string, gunzip bool) error {
+	var err error
+	if gunzip {
+		// Transparent decompression: stream gz from remote, write plain .hprof locally
+		err = utils.CopyOverCatGunzip(ctx.sshArgs(), ctx.fileName, localPath)
+	} else {
+		err = utils.CopyOverCat(ctx.sshArgs(), ctx.fileName, localPath)
+	}
+	if err != nil {
+		c.logVerbosef("File download failed: %v", err)
+		fmt.Fprintf(os.Stderr, "The %s was created successfully in the container at: %s\n", ctx.command.FileLabel, ctx.fileName)
+		fmt.Fprintf(os.Stderr, "However, downloading to local failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "The remote file is still available. Retry with:\n")
+		fmt.Fprintf(os.Stderr, "  cf ssh %s -c 'cat %s' > %s\n", ctx.applicationName, ctx.fileName, localPath)
+		return fmt.Errorf("download failed (remote file intact): %w", err)
+	}
+
+	fmt.Println(utils.ToSentenceCase(ctx.command.FileLabel) + " file saved to: " + localPath)
+	return c.openHeapDumpIfRequested(ctx, localPath)
+}
+
+// openHeapDumpIfRequested serves the dump once over localhost and opens the analyzer.
+func (c *JavaPlugin) openHeapDumpIfRequested(ctx *commandContext, path string) error {
+	if ctx.command.Name != cmdHeapDump || !ctx.options.Open {
+		return nil
+	}
+	port, urlFile, done, err := serveFileOnce(path, 10*time.Minute)
+	if err != nil {
+		return fmt.Errorf("could not start local file server: %w", err)
+	}
+	openURL := buildOpenURL(ctx.options.OpenURL, port, urlFile)
+	fmt.Printf("Opening heap dump in browser: %s\n", openURL)
+	openBrowser(openURL)
+	<-done
+	return nil
+}
+
+// downloadArbitraryFiles fetches every file the command left in its working folder.
+func (c *JavaPlugin) downloadArbitraryFiles(ctx *commandContext) error {
+	files, err := utils.ListFiles(ctx.sshArgs(), ctx.fspath)
+	if err != nil {
+		return err
+	}
+	c.logVerbosef("Found %d files to download in %s", len(files), ctx.fspath)
+	if len(files) == 0 {
+		return nil
+	}
+
+	for _, file := range files {
+		localPath := ctx.localDir + "/" + file
+		if err := utils.CopyOverCat(ctx.sshArgs(), ctx.fspath+"/"+file, localPath); err != nil {
+			c.logVerbosef("Failed to download file %s: %v", file, err)
+			return err
+		}
+		fmt.Printf("File %s saved to: %s\n", file, localPath)
+	}
+
+	return c.deleteRemoteArtifact(ctx, ctx.fspath, "File folder deleted in application container")
+}
+
+// deleteRemoteArtifact removes the file or folder from the container unless the user
+// asked to keep it.
+func (c *JavaPlugin) deleteRemoteArtifact(ctx *commandContext, path, successMessage string) error {
+	if ctx.keepAfterDownload {
+		c.logVerbosef("Keeping remote artifact %s as requested", path)
+		return nil
+	}
+	if err := utils.DeleteRemoteFile(ctx.sshArgs(), path); err != nil {
+		c.logVerbosef("Failed to delete remote artifact %s: %v", path, err)
+		return err
+	}
+	fmt.Println(successMessage)
+	return nil
+}
+
+// execute runs one `cf java` invocation as a pipeline:
+// lifecycle -> parse -> resolve command -> validate -> dispatch (local or SSH) ->
+// run -> download -> clean up.
+func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) (string, error) {
+	if handled, err := handleCLILifecycle(args); handled {
+		return "", err
 	}
 
 	options, arguments, parseErr := c.parseOptions(args[1:])
 	if parseErr != nil {
 		return "", &InvalidUsageError{message: fmt.Sprintf("Error while parsing command arguments: %v", parseErr)}
 	}
+	c.logVerbosef("Starting command execution with args: %v", args)
 
-	fileFlags := []string{flagContainerDir, flagLocalDir, flagKeep, flagNoDownload}
-
-	c.logVerbosef("Starting command execution")
-	c.logVerbosef("Command arguments: %v", args)
-
-	noDownload := options.NoDownload
-	keepAfterDownload := options.Keep || noDownload
-
-	c.logVerbosef("Application instance: %d", options.AppInstanceIndex)
-	c.logVerbosef("No download: %t", noDownload)
-	c.logVerbosef("Keep after download: %t", keepAfterDownload)
-
-	remoteDir := options.ContainerDir
-	// strip trailing slashes from remoteDir
-	remoteDir = strings.TrimRight(remoteDir, "/")
-	localDir := options.LocalDir
-	if localDir == "" {
-		localDir = "."
-	} else {
-		// Expand tilde to home directory
-		if localDir == "~" || strings.HasPrefix(localDir, "~/") {
-			home, err := os.UserHomeDir()
-			if err == nil {
-				localDir = home + localDir[1:]
-			}
-		}
-		// Reject path traversal sequences
-		cleaned := filepath.Clean(localDir)
-		if strings.Contains(cleaned, "..") {
-			return "", &InvalidUsageError{message: "Error: --local-dir must not contain path traversal sequences (..)"}
-		}
+	remoteDir := strings.TrimRight(options.ContainerDir, "/")
+	localDir, err := resolveLocalDir(options.LocalDir)
+	if err != nil {
+		return "", err
 	}
+	c.logVerbosef("Remote directory: %s, local directory: %s", remoteDir, localDir)
 
-	c.logVerbosef("Remote directory: %s", remoteDir)
-	c.logVerbosef("Local directory: %s", localDir)
-
-	argumentLen := len(arguments)
-
-	if argumentLen < 1 {
+	if len(arguments) < 1 {
 		return "", &InvalidUsageError{message: "No command provided"}
 	}
 
-	commandName := arguments[0]
-	c.logVerbosef("Command name: %s", commandName)
-
-	index := -1
-	lowerCommandName := strings.ToLower(commandName)
-	for i, command := range commands {
-		if command.Name == lowerCommandName {
-			index = i
-			break
-		}
-	}
-	if index == -1 {
-		// Handle 'help' as a subcommand
-		if lowerCommandName == "help" {
-			err := exec.Command("cf", "help", cmdJava).Run()
-			if err != nil {
-				return "", fmt.Errorf("failed to show help: %w", err)
-			}
-			return "", nil
-		}
-		avCommands := make([]string, 0, len(commands))
-		for _, command := range commands {
-			avCommands = append(avCommands, command.Name)
-		}
-		matches := utils.FuzzySearch(lowerCommandName, avCommands, 3)
-		return "", &InvalidUsageError{message: fmt.Sprintf("Unrecognized command %q, did you mean: %s?", commandName, utils.JoinWithOr(matches))}
+	// 'help' is not a real subcommand, it just forwards to `cf help java`.
+	if strings.ToLower(arguments[0]) == "help" {
+		return "", showPluginHelp()
 	}
 
-	command := commands[index]
+	command, err := findCommand(cliConnection, arguments)
+	if err != nil {
+		return "", err
+	}
 	c.logVerbosef("Found command: %s - %s", command.Name, command.Description)
+
+	warnAboutHeapDumpOnlyFlags(command, options)
 
 	// Only block CF_TRACE for commands that download files (not for read-only commands like vm-version)
 	if os.Getenv("CF_TRACE") == "true" && (command.GenerateFiles || command.GenerateArbitraryFiles) {
 		return "", errors.New("the environment variable CF_TRACE is set to true. This prevents download of the dump from succeeding")
 	}
 
-	// Handle --help flag for jstall command
-	if command.Name == "jstall" {
-		for _, arg := range arguments {
-			if arg == "--help" || arg == "-h" {
-				// Delegate to jstall --help directly
-				return c.executeJstall("", "--help", 0, false)
-			}
-		}
+	// `cf java jstall APP --help` is forwarded straight to jstall's own help.
+	if command.Name == "jstall" && hasHelpFlag(arguments) {
+		return c.executeJstall("", "--help", 0, false)
 	}
 
-	if !command.GenerateFiles && !command.GenerateArbitraryFiles {
-		c.logVerbosef("Command does not generate files, checking for invalid file flags")
-		for _, flag := range fileFlags {
-			if (flag == "container-dir" && options.ContainerDir != "") ||
-				(flag == "local-dir" && options.LocalDir != "") ||
-				(flag == "keep" && options.Keep) ||
-				(flag == "no-download" && options.NoDownload) {
-				c.logVerbosef("Invalid flag %q detected for command %s", flag, command.Name)
-				return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for %s", flag, command.Name)}
-			}
-		}
-	}
-	if command.Name == toolAsprof {
-		trimmedMiscArgs := strings.TrimLeft(options.Args, " ")
-		if len(trimmedMiscArgs) > 6 && trimmedMiscArgs[:6] == "start " {
-			noDownload = true
-			c.logVerbosef("asprof start command detected, setting noDownload to true")
-		} else {
-			noDownload = trimmedMiscArgs == "start"
-			if noDownload {
-				c.logVerbosef("asprof start command detected, setting noDownload to true")
-			}
-		}
-	}
-	if !command.HasMiscArgs() && options.Args != "" {
-		c.logVerbosef("Command %s does not support --args flag", command.Name)
-		return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for %s", "args", command.Name)}
-	}
-	// Reject whitespace-only --args
-	if options.Args != "" && strings.TrimSpace(options.Args) == "" {
-		return "", &InvalidUsageError{message: "Error: --args must not be empty or whitespace-only"}
-	}
-	// Validate that commands requiring @ARGS have arguments provided
-	if command.HasMiscArgs() && options.Args == "" && (command.Name == toolJcmd || command.Name == toolAsprof) {
-		c.logVerbosef("Command %s requires --args flag", command.Name)
-		return "", &InvalidUsageError{message: fmt.Sprintf("The command %q requires the --args flag to be set. Use 'cf java %s --help' for usage information.", command.Name, command.Name)}
-	}
-	if options.Full && !command.SupportFullOption {
-		c.logVerbosef("Command %s does not support --full flag", command.Name)
-		return "", &InvalidUsageError{message: fmt.Sprintf("The flag %q is not supported for %s", "full", command.Name)}
-	}
-	if argumentLen == 1 {
-		return "", &InvalidUsageError{message: "No application name provided"}
-	} else if argumentLen > 2 && !command.AcceptsTrailingArgs {
-		return "", &InvalidUsageError{message: fmt.Sprintf("Too many arguments provided: %v", strings.Join(arguments[2:], ", "))}
-	}
-
-	// Validate --local-dir exists (catches errors early, including during dry-run)
-	if options.LocalDir != "" && (command.GenerateFiles || command.GenerateArbitraryFiles) {
-		if _, statErr := os.Stat(localDir); os.IsNotExist(statErr) {
-			return "", &InvalidUsageError{message: fmt.Sprintf("Error: --local-dir %q does not exist", localDir)}
-		}
+	if err := validateInvocation(command, options, arguments, localDir); err != nil {
+		return "", err
 	}
 
 	applicationName := arguments[1]
-	c.logVerbosef("Application name: %s", applicationName)
-
-	cfSSHArguments := []string{cmdSSH, applicationName}
-	if options.AppInstanceIndex >= 0 {
-		cfSSHArguments = append(cfSSHArguments, "--app-instance-index", strconv.Itoa(options.AppInstanceIndex))
-	}
-	if options.AppInstanceIndex < -1 {
-		// indexes can't be negative (except -1 for default), so fail with an error
-		return "", &InvalidUsageError{message: fmt.Sprintf("Invalid application instance index %d, must be >= 0", options.AppInstanceIndex)}
-	}
-
-	c.logVerbosef("CF SSH arguments: %v", cfSSHArguments)
-
-	supported, err := utils.CheckRequiredTools(applicationName)
-
-	if err != nil || !supported {
-		return "required tools checking failed", err
+	noDownload, keepAfterDownload := resolveDownloadBehavior(command, options)
+	ctx := &commandContext{
+		command:           command,
+		options:           options,
+		applicationName:   applicationName,
+		cfSSHArguments:    buildSSHArguments(applicationName, options.AppInstanceIndex),
+		remoteDir:         remoteDir,
+		localDir:          localDir,
+		noDownload:        noDownload,
+		keepAfterDownload: keepAfterDownload,
 	}
 
-	c.logVerbosef("Required tools check passed")
+	if !options.DryRun {
+		supported, err := utils.CheckRequiredTools(applicationName)
+		if err != nil || !supported {
+			return "required tools checking failed", err
+		}
+		c.logVerbosef("Required tools check passed")
+	}
 
+	// Local commands (JStall) run on this machine and manage their own SSH session.
 	if command.IsLocal {
 		c.logVerbosef("Executing local command: %s", command.Name)
-		jstallArgs := options.Args
-		switch {
-		case command.SSHCommand == "@ARGS":
-			// Generic jstall passthrough: default to 'status all' if no --args provided
-			if options.Args == "" {
-				jstallArgs = "status all"
-			}
-		case command.AcceptsTrailingArgs:
-			// Commands like record-status: trailing positional arg is output file, --args are extra flags
-			// J-09: Reject more than one trailing positional argument
-			if argumentLen > 3 {
-				return "", &InvalidUsageError{message: fmt.Sprintf("%s accepts at most one trailing argument (output file), got %d", command.Name, argumentLen-2)}
-			}
-			trailingArg := ""
-			if argumentLen > 2 {
-				trailingArg = arguments[2]
-				// J-10: Reject empty trailing argument
-				if strings.TrimSpace(trailingArg) == "" {
-					return "", &InvalidUsageError{message: fmt.Sprintf("%s trailing argument must not be empty", command.Name)}
-				}
-			}
-			if trailingArg == "" {
-				trailingArg = applicationName + "-status.zip"
-			}
-			jstallArgs = strings.ReplaceAll(command.SSHCommand, "@ARGS", trailingArg)
-			if options.Args != "" {
-				jstallArgs += " " + options.Args
-			}
-		default:
-			// Templated commands like status: replace @ARGS with --args value (may be empty)
-			jstallArgs = strings.ReplaceAll(command.SSHCommand, "@ARGS", options.Args)
-			// Trim trailing whitespace from empty @ARGS substitution
-			jstallArgs = strings.TrimRight(jstallArgs, " ")
-		}
-		if options.Full {
-			// J-12: Only add --full if not already present in args to avoid duplication
-			if !strings.Contains(jstallArgs, "--full") {
-				jstallArgs += " --full"
-				jstallArgs = strings.TrimLeft(jstallArgs, " ")
-			}
+		jstallArgs, err := c.buildJstallArgs(command, applicationName, arguments, options)
+		if err != nil {
+			return "", err
 		}
 		return c.executeJstall(applicationName, jstallArgs, options.AppInstanceIndex, options.DryRun)
 	}
 
+	// Everything below runs inside the application container via `cf ssh`.
 	if !options.DryRun {
 		if err := c.checkSSHConnectivity(applicationName, options.AppInstanceIndex); err != nil {
 			return "", err
 		}
 	}
 
-	remoteCommandTokens := []string{JavaDetectionCommand}
-
-	c.logVerbosef("Building remote command tokens")
-	c.logVerbosef("Java detection command: %s", JavaDetectionCommand)
-
-	for _, requiredTool := range command.RequiredTools {
-		c.logVerbosef("Setting up required tool: %s", requiredTool)
-		uppercase := strings.ToUpper(requiredTool)
-		toolCommand := fmt.Sprintf(`%[1]s_TOOL_PATH=$(find -executable -name %[2]s | head -1 | tr -d [:space:]); if [ -z "$%[1]s_TOOL_PATH" ]; then echo "%[2]s not found"; exit 1; fi; %[1]s_COMMAND=$(realpath "$%[1]s_TOOL_PATH")`, uppercase, requiredTool)
-		if requiredTool == toolJcmd {
-			// add code that first checks whether asprof is present and if so use `asprof jcmd` instead of `jcmd`
-			remoteCommandTokens = append(remoteCommandTokens, toolCommand, "ASPROF_COMMAND=$(realpath $(find -executable -name asprof | head -1 | tr -d [:space:])); if [ -n \"${ASPROF_COMMAND}\" ]; then JCMD_COMMAND=\"${ASPROF_COMMAND} jcmd\"; fi")
-			c.logVerbosef("Added jcmd with asprof fallback")
-		} else {
-			remoteCommandTokens = append(remoteCommandTokens, toolCommand)
-			c.logVerbosef("Added tool command for %s", requiredTool)
-		}
-	}
-	fileName := ""
-	staticFileName := ""
-	fspath := remoteDir
-
-	// Initialize fspath and fileName for commands that need them
-	if command.GenerateFiles || command.NeedsFileName || command.GenerateArbitraryFiles {
-		c.logVerbosef("Command requires file generation")
-		if options.DryRun {
-			// In dry-run mode, use user-supplied path or /tmp without SSH validation
-			if remoteDir != "" {
-				fspath = remoteDir
-			} else {
-				fspath = "/tmp"
-			}
-			c.logVerbosef("Dry-run mode: using path %s without validation", fspath)
-		} else {
-			fspath, err = utils.GetAvailablePath(applicationName, remoteDir)
-			if err != nil {
-				return "", fmt.Errorf("failed to get available path: %w", err)
-			}
-			if fspath == "" {
-				return "", fmt.Errorf("no available path found for file generation")
-			}
-		}
-		c.logVerbosef("Available path: %s", fspath)
-
-		if command.GenerateArbitraryFiles {
-			fspath = fspath + "/" + command.GenerateArbitraryFilesFolderName
-			c.logVerbosef("Updated path for arbitrary files: %s", fspath)
-		}
-
-		namePart := ""
-		if command.FileNamePart != "" {
-			namePart = "-" + command.FileNamePart
-		}
-		fileName = fspath + "/" + applicationName + namePart + "-" + utils.GenerateUUID() + command.FileExtension
-		staticFileName = fspath + "/" + applicationName + namePart + command.FileExtension
-		c.logVerbosef("Generated filename: %s", fileName)
-		c.logVerbosef("Generated static filename without UUID: %s", staticFileName)
+	if err := c.prepareRemotePaths(ctx); err != nil {
+		return "", err
 	}
 
-	commandText := command.SSHCommand
-	// Perform variable replacements directly in Go code
-	var err2 error
-	commandText, err2 = c.replaceVariables(commandText, applicationName, fspath, fileName, staticFileName, options.Args)
-	if err2 != nil {
-		return "", fmt.Errorf("variable replacement failed: %w", err2)
+	remoteCommand, err := c.buildRemoteCommand(ctx)
+	if err != nil {
+		return "", err
 	}
-
-	// For arbitrary files commands, insert mkdir and cd before the main command
-	if command.GenerateArbitraryFiles {
-		remoteCommandTokens = append(remoteCommandTokens, "mkdir -p \""+fspath+"\"", "cd \""+fspath+"\"", commandText)
-		c.logVerbosef("Added directory creation and navigation before command execution")
-	} else {
-		remoteCommandTokens = append(remoteCommandTokens, commandText)
-	}
-
-	c.logVerbosef("Command text after replacements: %s", commandText)
-	c.logVerbosef("Full remote command tokens: %v", remoteCommandTokens)
-
-	cfSSHArguments = append(cfSSHArguments, "--command")
-	remoteCommand := strings.Join(remoteCommandTokens, "; ")
-
-	c.logVerbosef("Final remote command: %s", remoteCommand)
 
 	if options.DryRun {
 		c.logVerbosef("Dry-run mode enabled, returning command without execution")
-		// When printing out the entire command line for separate execution, we wrap the remote command in single quotes
-		// to prevent the shell processing it from running it in local
-		escapedCommand := strings.ReplaceAll(remoteCommand, "'", "'\\''")
-		cfSSHArguments = append(cfSSHArguments, "'"+escapedCommand+"'")
-		return "cf " + strings.Join(cfSSHArguments, " "), nil
+		if command.Name == cmdHeapDump && options.Open {
+			ext := extHprof
+			if options.Compress {
+				ext = extHprofGz
+			}
+			fmt.Printf("Would open: %s\n", buildOpenURL(options.OpenURL, 0, "TOKEN"+ext))
+		}
+		return dryRunCommandLine(ctx, remoteCommand), nil
 	}
 
-	fullCommand := append([]string{}, cfSSHArguments...)
-	fullCommand = append(fullCommand, remoteCommand)
-	c.logVerbosef("Executing command: %v", fullCommand)
-	cmd := exec.Command("cf", fullCommand...)
-	outputBytes, err := cmd.CombinedOutput()
-	output := strings.TrimRight(string(outputBytes), "\n")
+	output, err := c.runRemoteCommand(ctx, remoteCommand)
 	if err != nil {
-		if isSSHConnectivityError(output, err) {
-			return "", fmt.Errorf("%s", wrapSSHError(applicationName, output, err))
-		}
-		if err.Error() == "unexpected EOF" {
-			return "", fmt.Errorf("Command failed")
-		}
-		if len(output) == 0 {
-			return "", fmt.Errorf("Command execution failed: %w", err)
-		}
-		return "", fmt.Errorf("Command execution failed: %w\nOutput: %s", err, output)
+		return "", err
 	}
 
 	if command.GenerateFiles {
-		c.logVerbosef("Processing file generation and download")
-
-		var finalFile string
-		var err error
-		switch command.FileExtension {
-		case ".hprof":
-			c.logVerbosef("Finding heap dump file")
-			finalFile, err = utils.FindHeapDumpFile(cfSSHArguments, fileName, fspath, applicationName+"-"+command.FileNamePart)
-		case ".jfr":
-			c.logVerbosef("Finding JFR file")
-			finalFile, err = utils.FindJFRFile(cfSSHArguments, fileName, fspath, applicationName+"-"+command.FileNamePart)
-		default:
-			return "", &InvalidUsageError{message: fmt.Sprintf("Unsupported file extension %q", command.FileExtension)}
-		}
-		if err == nil && finalFile != "" {
-			fileName = finalFile
-			c.logVerbosef("Found file: %s", finalFile)
-			fmt.Println("Successfully created " + command.FileLabel + " in application container at: " + fileName)
-		} else if !noDownload {
-			c.logVerbosef("Failed to find file, error: %v", err)
-			fmt.Println("Failed to find " + command.FileLabel + " in application container")
-			if err == nil {
-				err = fmt.Errorf("failed to find %s in application container", command.FileLabel)
-			}
+		if err := c.collectGeneratedFile(ctx); err != nil {
 			return "", err
 		}
-
-		if noDownload {
+		if ctx.noDownload {
 			fmt.Println("No download requested, skipping file download")
 			return output, nil
 		}
-
-		localFileFullPath := localDir + "/" + applicationName + "-" + command.FileNamePart + "-" + utils.GenerateUUID() + command.FileExtension
-		c.logVerbosef("Downloading file to: %s", localFileFullPath)
-		err = utils.CopyOverCat(cfSSHArguments, fileName, localFileFullPath)
-		if err == nil {
-			c.logVerbosef("File download completed successfully")
-			fmt.Println(utils.ToSentenceCase(command.FileLabel) + " file saved to: " + localFileFullPath)
-		} else {
-			c.logVerbosef("File download failed: %v", err)
-			fmt.Fprintf(os.Stderr, "The %s was created successfully in the container at: %s\n", command.FileLabel, fileName)
-			fmt.Fprintf(os.Stderr, "However, downloading to local failed: %v\n", err)
-			fmt.Fprintf(os.Stderr, "The remote file is still available. Retry with:\n")
-			fmt.Fprintf(os.Stderr, "  cf ssh %s -c 'cat %s' > %s\n", applicationName, fileName, localFileFullPath)
-			return "", fmt.Errorf("download failed (remote file intact): %w", err)
-		}
-
-		if !keepAfterDownload {
-			c.logVerbosef("Deleting remote file")
-			err = utils.DeleteRemoteFile(cfSSHArguments, fileName)
-			if err != nil {
-				c.logVerbosef("Failed to delete remote file: %v", err)
-				return "", err
-			}
-			c.logVerbosef("Remote file deleted successfully")
-			fmt.Println(utils.ToSentenceCase(command.FileLabel) + " file deleted in application container")
-		} else {
-			c.logVerbosef("Keeping remote file as requested")
-		}
-	}
-	if command.GenerateArbitraryFiles && !noDownload {
-		c.logVerbosef("Processing arbitrary files download: %s", fspath)
-		c.logVerbosef("cfSSHArguments: %v", cfSSHArguments)
-		// download all files in the generic folder
-		files, err := utils.ListFiles(cfSSHArguments, fspath)
-		for i, file := range files {
-			c.logVerbosef("File %d: %s", i+1, file)
-		}
-		if err != nil {
-			c.logVerbosef("Failed to list files: %v", err)
+		if err := c.downloadGeneratedFile(ctx); err != nil {
 			return "", err
 		}
-		c.logVerbosef("Found %d files to download", len(files))
-		if len(files) != 0 {
-			for _, file := range files {
-				c.logVerbosef("Downloading file: %s", file)
-				localFileFullPath := localDir + "/" + file
-				err = utils.CopyOverCat(cfSSHArguments, fspath+"/"+file, localFileFullPath)
-				if err == nil {
-					c.logVerbosef("File %s downloaded successfully", file)
-					fmt.Printf("File %s saved to: %s\n", file, localFileFullPath)
-				} else {
-					c.logVerbosef("Failed to download file %s: %v", file, err)
-					return "", err
-				}
-			}
-
-			if !keepAfterDownload {
-				c.logVerbosef("Deleting remote file folder")
-				err = utils.DeleteRemoteFile(cfSSHArguments, fspath)
-				if err != nil {
-					c.logVerbosef("Failed to delete remote folder: %v", err)
-					return "", err
-				}
-				c.logVerbosef("Remote folder deleted successfully")
-				fmt.Println("File folder deleted in application container")
-			} else {
-				c.logVerbosef("Keeping remote files as requested")
-			}
-		} else {
-			c.logVerbosef("No files found to download")
+		if err := c.deleteRemoteArtifact(ctx, ctx.fileName, utils.ToSentenceCase(command.FileLabel)+" file deleted in application container"); err != nil {
+			return "", err
 		}
 	}
-	// We keep this around to make the compiler happy, but commandExecutor.Execute will cause an os.Exit
+
+	if command.GenerateArbitraryFiles && !ctx.noDownload {
+		if err := c.downloadArbitraryFiles(ctx); err != nil {
+			return "", err
+		}
+	}
+
 	c.logVerbosef("Command execution completed successfully")
-	return output, err
+	return output, nil
 }
 
 // GetMetadata must be implemented as part of the plugin interface
