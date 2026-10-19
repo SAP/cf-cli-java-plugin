@@ -334,7 +334,7 @@ func TestServeFileOnce_ConcurrentGETsNoPanic(t *testing.T) {
 
 	// Collect both results — one may get a connection-refused after server shuts down
 	for range 2 {
-		<-errs
+		_ = <-errs //nolint:staticcheck
 	}
 
 	select {
