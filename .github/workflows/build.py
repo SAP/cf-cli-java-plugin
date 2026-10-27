@@ -49,7 +49,10 @@ for archive_name, member, dest, is_zip in hprof_targets:
                 data = zf.read(member)
         else:
             with tarfile.open(tmp, "r:gz") as tf:
-                data = tf.extractfile(member).read()
+                member_file = tf.extractfile(member)
+                if member_file is None:
+                    raise ValueError(f"tar member {member!r} is not a regular file (hardlink or directory?)")
+                data = member_file.read()
         with open(dest, "wb") as f:
             f.write(data)
         os.chmod(dest, 0o755)

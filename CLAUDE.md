@@ -120,8 +120,27 @@ The `commands` slice in `cf_cli_java_plugin.go` is the sole source of truth for 
 - `AcceptsTrailingArgs` — command takes positional arguments after the app name (e.g. `record-status APP outfile.zip`)
 - `OnlyOnRecentSapMachine` — marks SapMachine-specific commands
 
+### Key Helpers
+
+- `containsFlag(s, flag)` — word-boundary flag check (not substring). Used for `--full` dedup in
+  `buildJstallArgs`. Prevents `--fullscreen` from matching `--full`.
+- `shellSingleQuote(s)` / `ShellSingleQuote(s)` — POSIX single-quote escaping (`'` → `'"'"'`).
+  Used in SSH command construction for app names and file paths. Has round-trip shell tests.
+- `wrapSSHError(appName, output, err)` — categorises SSH errors into user-friendly messages.
+  Used by both `checkSSHConnectivity` (remote commands) and `executeJstall` (local commands).
+
 ### Testing Approach
 
-Go unit tests in `cf_cli_java_plugin_test.go` and `open_test.go`/`redact_test.go` use a `fakeConn` stub
-for `plugin.CliConnection`. They test flag parsing, error messages, and local logic without a real CF
-connection. Integration tests in `test/` are Python (pytest) and require a configured CF environment.
+Go unit tests in `cf_cli_java_plugin_test.go`, `jstall_test.go`, `open_test.go`, `redact_test.go`, and
+`utils/cfutils_test.go` use a `fakeConn` stub for `plugin.CliConnection`. They test flag parsing, error
+messages, and local logic without a real CF connection. Integration tests in `test/` are Python (pytest)
+and require a configured CF environment.
+
+**Test conventions:**
+
+- `findTestCommand(t, "name")` — looks up a command from the real `commands` slice instead of
+  duplicating struct literals. Tests break immediately if a command is renamed or its fields change.
+- `TestReadmeCommandTable_ListsAllCommands` — validates that every command in the `commands` slice
+  appears in the README command table. Catches documentation drift in CI.
+- `TestShellSingleQuote_RoundTripThroughShell` — round-trips inputs through real `/bin/sh` to
+  verify quoting correctness (skipped on Windows).

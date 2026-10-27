@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
-- Bundle [jstall](https://github.com/parttimenerd/jstall) v0.8.3 (jstall-minimal.jar) for one-shot JVM
+- Bundle [jstall](https://github.com/parttimenerd/jstall) v0.8.8 (jstall-minimal.jar) for one-shot JVM
   inspection via `cf java jstall APP_NAME`. Requires Java 17+ locally. Key subcommands: `status` (thread
   analysis, metaspace, GC, compiler queue), `record-status` (repeated sampling), `flame-graph`, `heap-info`.
   Supports all jstall subcommands via `--args`.
@@ -21,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   measurement — run again to see rate-based values (CPU%, swap in/out, etc.).
   v0.8.4: `--vital-rows` option (default 10) controls how many history rows are shown in the
   vm-vitals table, decoupled from `--top` which controls thread counts.
+  v0.8.8: `vm-vitals` extreme-value column headers now align with data values (the `+`/`-` marker gets
+  its own dedicated column slot).
 - `heap-dump --redact`: zeros primitive arrays (`byte[]`, `char[]`, etc.) in the downloaded dump before saving
   (lean redaction mode), using the bundled [hprof-redact](https://github.com/parttimenerd/hprof-analyzer) binary.
   Supported on Linux (amd64, arm64), macOS (Apple Silicon), and Windows (amd64, arm64).

@@ -283,6 +283,12 @@ Quick status check of the remote JVM (requires Java 17+ locally):
 
 ```sh
 cf java status $APP_NAME
+
+# Comprehensive analysis (includes expensive diagnostics)
+cf java status $APP_NAME --full
+
+# Pass additional options to the jstall status subcommand
+cf java status $APP_NAME --args '--dumps 3'
 ```
 
 Running [JStall](https://github.com/parttimenerd/jstall) for more specific JVM inspection (requires Java 17+ locally):
@@ -351,14 +357,38 @@ directory and downloads any files created there to your local directory (unless 
 
 ### Commands
 
-The following is a list of all available commands (some are SapMachine-specific), generated via `cf java --help`:
+The following is a list of all available commands. Run `cf java --help` to see the full list with flags.
 
 <!-- prettier-ignore-start -->
-<!-- markdownlint-disable MD036 -->
+<!-- markdownlint-disable MD013 -->
 
-*Run `cf java --help` to see the full list of commands.*
+| Command | Description | Notes |
+| --- | --- | --- |
+| `heap-dump` | Generate a heap dump from a running Java application | supports `--redact`, `--compress`, `--open` |
+| `thread-dump` | Generate a thread dump from a running Java application | streams to stdout |
+| `vm-info` | Print information about the remote JVM | |
+| `vm-version` | Print the version of the remote JVM | |
+| `vm-vitals` | Print vital statistics about the remote JVM | requires `jcmd` |
+| `jcmd` | Run an arbitrary jcmd command via `--args` | requires `--args` |
+| `jfr-start` | Start a JFR default recording | requires `jcmd` |
+| `jfr-start-profile` | Start a JFR profile recording | requires `jcmd` |
+| `jfr-start-gc` | Start a JFR GC recording | SapMachine only |
+| `jfr-start-gc-details` | Start a JFR detailed GC recording | SapMachine only |
+| `jfr-stop` | Stop a JFR recording and download it | requires `jcmd` |
+| `jfr-dump` | Dump a JFR recording without stopping it | requires `jcmd` |
+| `jfr-status` | Check the running JFR recording | requires `jcmd` |
+| `asprof` | Run async-profiler commands via `--args` | SapMachine only |
+| `asprof-start-cpu` | Start an async-profiler CPU profile | SapMachine only |
+| `asprof-start-wall` | Start an async-profiler wall-clock profile | SapMachine only |
+| `asprof-start-alloc` | Start an async-profiler allocation profile | SapMachine only |
+| `asprof-start-lock` | Start an async-profiler lock profile | SapMachine only |
+| `asprof-stop` | Stop an async-profiler recording and download it | SapMachine only |
+| `asprof-status` | Get the status of async-profiler | SapMachine only |
+| `status` | Quick JVM status check (deadlocks, hot threads, etc.) | requires Java 17+ locally, supports `--full` |
+| `jstall` | Run any jstall subcommand via `--args` | requires Java 17+ locally, supports `--full` |
+| `record-status` | Record diagnostic data to a local zip file | requires Java 17+ locally, supports `--full` |
 
-<!-- markdownlint-enable MD036 -->
+<!-- markdownlint-enable MD013 -->
 <!-- prettier-ignore-end -->
 
 ### Security Note on `--args`
@@ -366,6 +396,19 @@ The following is a list of all available commands (some are SapMachine-specific)
 The `--args` parameter passes values directly into remote shell commands via `cf ssh`. This is by design to support
 shell features like environment variable expansion and piping. **Do not pass untrusted input to `--args`** — treat it
 with the same caution as a shell command.
+
+### Verbose Output
+
+Use `--verbose` to enable detailed diagnostic logging from the plugin itself (Java discovery, JAR extraction paths,
+SSH connectivity checks, command construction). This is useful when debugging why a command fails before reaching
+the remote container.
+
+```sh
+cf java heap-dump $APP_NAME --verbose
+```
+
+**Note:** `-v` is reserved by the CF CLI for its own trace mode (`CF_TRACE`) and cannot be used as a shorthand here.
+Only the long form `--verbose` is available.
 
 ### File Output
 

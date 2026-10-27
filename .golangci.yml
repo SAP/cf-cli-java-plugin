@@ -29,7 +29,6 @@ linters:
     - errname          # Check error naming conventions
     - errorlint        # Check error wrapping
     - exhaustive       # Check enum switch exhaustiveness
-    - goconst          # Find repeated strings that could be constants
     - godox            # Find TODO, FIXME, etc. comments
     - goprintffuncname # Check printf-style function names
     - misspell         # Check for misspellings

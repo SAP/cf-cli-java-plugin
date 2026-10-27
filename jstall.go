@@ -151,10 +151,7 @@ func ensureJstallJar() (string, error) {
 	if err := os.WriteFile(jarPath, jstallJarBytes, 0o644); err != nil { //nolint:gosec // 0644 is correct; JAR must be readable to execute
 		return "", err
 	}
-	if err := os.WriteFile(hashPath, []byte(expectedHash), 0o644); err != nil { //nolint:gosec // 0644 is correct for a hash file
-		// Non-fatal: JAR is already written, just can't cache the hash
-		_ = err
-	}
+	_ = os.WriteFile(hashPath, []byte(expectedHash), 0o644) //nolint:gosec // 0644 is correct for a hash file; non-fatal if it fails
 	return jarPath, nil
 }
 
@@ -208,19 +205,32 @@ func buildJstallArgs(jarPath, appName, jstallArgs string, appInstanceIndex int) 
 		args = append(args, "--cf", appName)
 	}
 
+	hasSubcommand := false
 	if jstallArgs != "" {
 		splitArgs, err := shlex.Split(jstallArgs)
 		if err != nil {
 			return nil, fmt.Errorf("invalid jstall arguments: %w", err)
 		}
 		args = append(args, splitArgs...)
+		// A subcommand is a positional token (not starting with '-').
+		// If no subcommand is present (e.g. jstallArgs is "--help"), then
+		// --unicode is a top-level flag that doesn't exist, so skip it.
+		for _, a := range splitArgs {
+			if !strings.HasPrefix(a, "-") {
+				hasSubcommand = true
+				break
+			}
+		}
 	}
 
 	// Always use ASCII output: jstall runs locally and its output is captured as a string,
 	// so Unicode arrows would be garbled on Windows CP1252 terminals regardless of JVM encoding.
 	// Must come after the subcommand name (which is part of jstallArgs) since --unicode is
 	// declared on the subcommand, not the top-level Main class.
-	args = append(args, "--unicode", "off")
+	// Skip when no subcommand is present (e.g. --help / --version) to avoid an unknown-flag error.
+	if hasSubcommand {
+		args = append(args, "--unicode", "off")
+	}
 
 	return args, nil
 }
@@ -250,21 +260,10 @@ func (c *JavaPlugin) executeJstall(appName string, jstallArgs string, appInstanc
 		return displayCmd, nil
 	}
 
-	// Pre-validate SSH connectivity to avoid confusing "No JVMs found" errors
+	// Pre-validate SSH connectivity to avoid confusing "No JVMs found" errors.
 	if appName != "" {
-		testArgs := []string{cmdSSH, appName}
-		if appInstanceIndex != -1 {
-			testArgs = append(testArgs, "--app-instance-index", strconv.Itoa(appInstanceIndex))
-		}
-		testArgs = append(testArgs, "-c", "echo ok")
-		testCmd := exec.Command("cf", testArgs...)
-		testOutput, testErr := testCmd.CombinedOutput()
-		if testErr != nil {
-			outputStr := strings.TrimSpace(string(testOutput))
-			if outputStr != "" {
-				return "", fmt.Errorf("cannot connect to application via SSH: %s", outputStr)
-			}
-			return "", fmt.Errorf("cannot connect to application via SSH: %w", testErr)
+		if err := c.checkSSHConnectivity(appName, appInstanceIndex); err != nil {
+			return "", err
 		}
 	}
 

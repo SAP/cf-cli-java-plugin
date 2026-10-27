@@ -12,77 +12,14 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	plugin_models "code.cloudfoundry.org/cli/plugin/models"
 )
 
 const testAppName = "myapp"
 
-// fakeConn is a stub CliConnection that knows about one app by name.
-type fakeConn struct {
-	knownApp string
-}
-
-func (f *fakeConn) GetApp(name string) (plugin_models.GetAppModel, error) {
-	if name == f.knownApp {
-		return plugin_models.GetAppModel{}, nil
-	}
-	return plugin_models.GetAppModel{}, &notFoundError{name}
-}
-
-type notFoundError struct{ name string }
-
-func (e *notFoundError) Error() string { return "app not found: " + e.name }
-
-func (f *fakeConn) CliCommandWithoutTerminalOutput(args ...string) ([]string, error) {
-	return nil, nil
-}
-func (f *fakeConn) CliCommand(args ...string) ([]string, error) { return nil, nil }
-func (f *fakeConn) GetCurrentOrg() (plugin_models.Organization, error) {
-	return plugin_models.Organization{}, nil
-}
-func (f *fakeConn) GetCurrentSpace() (plugin_models.Space, error)       { return plugin_models.Space{}, nil }
-func (f *fakeConn) Username() (string, error)                           { return "", nil }
-func (f *fakeConn) UserGuid() (string, error)                           { return "", nil }
-func (f *fakeConn) UserEmail() (string, error)                          { return "", nil }
-func (f *fakeConn) IsLoggedIn() (bool, error)                           { return false, nil }
-func (f *fakeConn) IsSSLDisabled() (bool, error)                        { return false, nil }
-func (f *fakeConn) HasOrganization() (bool, error)                      { return false, nil }
-func (f *fakeConn) HasSpace() (bool, error)                             { return false, nil }
-func (f *fakeConn) ApiEndpoint() (string, error)                        { return "", nil }
-func (f *fakeConn) ApiVersion() (string, error)                         { return "", nil }
-func (f *fakeConn) HasAPIEndpoint() (bool, error)                       { return false, nil }
-func (f *fakeConn) LoggregatorEndpoint() (string, error)                { return "", nil }
-func (f *fakeConn) DopplerEndpoint() (string, error)                    { return "", nil }
-func (f *fakeConn) AccessToken() (string, error)                        { return "", nil }
-func (f *fakeConn) GetApps() ([]plugin_models.GetAppsModel, error)      { return nil, nil }
-func (f *fakeConn) GetOrgs() ([]plugin_models.GetOrgs_Model, error)     { return nil, nil }
-func (f *fakeConn) GetSpaces() ([]plugin_models.GetSpaces_Model, error) { return nil, nil }
-func (f *fakeConn) GetOrgUsers(string, ...string) ([]plugin_models.GetOrgUsers_Model, error) {
-	return nil, nil
-}
-
-func (f *fakeConn) GetSpaceUsers(string, string) ([]plugin_models.GetSpaceUsers_Model, error) {
-	return nil, nil
-}
-func (f *fakeConn) GetServices() ([]plugin_models.GetServices_Model, error) { return nil, nil }
-func (f *fakeConn) GetService(string) (plugin_models.GetService_Model, error) {
-	return plugin_models.GetService_Model{}, nil
-}
-
-func (f *fakeConn) GetOrg(string) (plugin_models.GetOrg_Model, error) {
-	return plugin_models.GetOrg_Model{}, nil
-}
-
-func (f *fakeConn) GetSpace(string) (plugin_models.GetSpace_Model, error) {
-	return plugin_models.GetSpace_Model{}, nil
-}
-
 func TestExecute_SwappedAppAndCommand(t *testing.T) {
 	p := &JavaPlugin{}
-	conn := &fakeConn{knownApp: testAppName}
 	// User typed: cf java myapp heap-dump  (app and command swapped)
-	_, err := p.execute(conn, []string{cmdJava, testAppName, cmdHeapDump})
+	_, err := p.execute([]string{cmdJava, testAppName, cmdHeapDump})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -92,23 +29,22 @@ func TestExecute_SwappedAppAndCommand(t *testing.T) {
 	}
 }
 
-func TestExecute_UnrecognizedCommand_NoSwapHint_WhenAppUnknown(t *testing.T) {
+func TestExecute_UnrecognizedCommand_NoSwapHint_WhenSecondArgNotACommand(t *testing.T) {
 	p := &JavaPlugin{}
-	conn := &fakeConn{knownApp: "other-app"}
-	_, err := p.execute(conn, []string{cmdJava, "bogus-command", testAppName})
+	// First arg is not a valid command, second arg is also not a valid command -> fuzzy match only
+	_, err := p.execute([]string{cmdJava, "bogus-command", "also-not-a-command"})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
 	if strings.Contains(err.Error(), "swapped") {
-		t.Errorf("should not suggest swap when first arg is not a known app: %s", err.Error())
+		t.Errorf("should not suggest swap when second arg is not a known command: %s", err.Error())
 	}
 }
 
-func TestExecute_SwappedAppAndCommand_AppNotInCF(t *testing.T) {
-	// cf java sapmachine17 vm-vitals where sapmachine17 IS a known app — should suggest swap
+func TestExecute_SwappedAppAndCommand_SuggestsSwapBasedOnPattern(t *testing.T) {
+	// cf java sapmachine17 vm-vitals — second arg is a known command, suggest swap regardless of CF app lookup
 	p := &JavaPlugin{}
-	conn := &fakeConn{knownApp: "sapmachine17"}
-	_, err := p.execute(conn, []string{cmdJava, "sapmachine17", cmdVmVitals})
+	_, err := p.execute([]string{cmdJava, "sapmachine17", cmdVmVitals})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -118,17 +54,16 @@ func TestExecute_SwappedAppAndCommand_AppNotInCF(t *testing.T) {
 	}
 }
 
-func TestExecute_NoSwapHint_WhenFirstArgNotKnownApp(t *testing.T) {
-	// cf java sapmachiasdfadfadfne17 vm-vitals — CF doesn't know this app, no swap hint
+func TestExecute_NoSwapHint_WhenSecondArgNotACommand(t *testing.T) {
+	// cf java sapmachiasdfadfadfne17 not-a-command — second arg is not a command, no swap hint
 	p := &JavaPlugin{}
-	conn := &fakeConn{knownApp: "other-app"}
-	_, err := p.execute(conn, []string{cmdJava, "sapmachiasdfadfadfne17", cmdVmVitals})
+	_, err := p.execute([]string{cmdJava, "sapmachiasdfadfadfne17", "not-a-command"})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
 	msg := err.Error()
 	if strings.Contains(msg, "swapped") {
-		t.Errorf("should not suggest swap when CF doesn't know the first arg as an app: %s", msg)
+		t.Errorf("should not suggest swap when second arg is not a known command: %s", msg)
 	}
 }
 
@@ -225,5 +160,185 @@ func TestPrepareRemotePaths_DryRunDoesNotCallCF(t *testing.T) {
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatalf("dry-run called cf (stat error: %v)", err)
+	}
+}
+
+// --- buildJstallArgs (plugin-level) tests ---
+
+// findTestCommand looks up a command by name from the real commands slice.
+// Tests use this instead of duplicating Command struct literals so they
+// break immediately when a command definition changes in the source.
+func findTestCommand(t *testing.T, name string) *Command {
+	t.Helper()
+	for i := range commands {
+		if commands[i].Name == name {
+			return &commands[i]
+		}
+	}
+	t.Fatalf("command %q not found in commands slice — was it renamed?", name)
+	return nil
+}
+
+func TestBuildJstallArgs_StatusDefaultsToAll(t *testing.T) {
+	p := &JavaPlugin{}
+	cmd := findTestCommand(t, "status")
+	got, err := p.buildJstallArgs(cmd, testAppName, []string{"status", testAppName}, &Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "status all" {
+		t.Errorf("expected %q, got %q", "status all", got)
+	}
+}
+
+func TestBuildJstallArgs_StatusWithArgs(t *testing.T) {
+	p := &JavaPlugin{}
+	cmd := findTestCommand(t, "status")
+	got, err := p.buildJstallArgs(cmd, testAppName, []string{"status", testAppName}, &Options{Args: "--dumps 3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "status all --dumps 3" {
+		t.Errorf("expected %q, got %q", "status all --dumps 3", got)
+	}
+}
+
+func TestBuildJstallArgs_StatusFull(t *testing.T) {
+	p := &JavaPlugin{}
+	cmd := findTestCommand(t, "status")
+	got, err := p.buildJstallArgs(cmd, testAppName, []string{"status", testAppName}, &Options{Full: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "status all --full" {
+		t.Errorf("expected %q, got %q", "status all --full", got)
+	}
+}
+
+func TestBuildJstallArgs_StatusFullNoDuplicate(t *testing.T) {
+	p := &JavaPlugin{}
+	cmd := findTestCommand(t, "status")
+	// User explicitly passes --full via --args; the plugin must not add it again
+	got, err := p.buildJstallArgs(cmd, testAppName, []string{"status", testAppName}, &Options{Full: true, Args: "--full"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(got, "--full") != 1 {
+		t.Errorf("expected exactly one --full, got %q", got)
+	}
+}
+
+func TestBuildJstallArgs_FullNotSuppressedByPrefix(t *testing.T) {
+	p := &JavaPlugin{}
+	cmd := findTestCommand(t, "status")
+	// A hypothetical --fullscreen must not prevent --full from being appended
+	got, err := p.buildJstallArgs(cmd, testAppName, []string{"status", testAppName}, &Options{Full: true, Args: "--fullscreen"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "--fullscreen") {
+		t.Errorf("expected --fullscreen in args, got %q", got)
+	}
+	if !strings.HasSuffix(got, "--full") {
+		t.Errorf("expected --full appended at end, got %q", got)
+	}
+}
+
+func TestBuildJstallArgs_JstallDefaultsToStatusAll(t *testing.T) {
+	p := &JavaPlugin{}
+	cmd := findTestCommand(t, "jstall")
+	got, err := p.buildJstallArgs(cmd, testAppName, []string{"jstall", testAppName}, &Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "status all" {
+		t.Errorf("expected %q, got %q", "status all", got)
+	}
+}
+
+func TestBuildJstallArgs_JstallPassthrough(t *testing.T) {
+	p := &JavaPlugin{}
+	cmd := findTestCommand(t, "jstall")
+	got, err := p.buildJstallArgs(cmd, testAppName, []string{"jstall", testAppName}, &Options{Args: "deadlock all"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "deadlock all" {
+		t.Errorf("expected %q, got %q", "deadlock all", got)
+	}
+}
+
+func TestBuildJstallArgs_RecordStatusDefaultFile(t *testing.T) {
+	p := &JavaPlugin{}
+	cmd := findTestCommand(t, "record-status")
+	got, err := p.buildJstallArgs(cmd, testAppName, []string{"record-status", testAppName}, &Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := "record all --output " + testAppName + "-status.zip"
+	if got != expected {
+		t.Errorf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestBuildJstallArgs_RecordStatusCustomFile(t *testing.T) {
+	p := &JavaPlugin{}
+	cmd := findTestCommand(t, "record-status")
+	got, err := p.buildJstallArgs(cmd, testAppName, []string{"record-status", testAppName, "diag.zip"}, &Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "record all --output diag.zip" {
+		t.Errorf("expected %q, got %q", "record all --output diag.zip", got)
+	}
+}
+
+func TestBuildJstallArgs_RecordStatusTooManyTrailingArgs(t *testing.T) {
+	p := &JavaPlugin{}
+	cmd := findTestCommand(t, "record-status")
+	_, err := p.buildJstallArgs(cmd, testAppName, []string{"record-status", testAppName, "a.zip", "extra"}, &Options{})
+	if err == nil {
+		t.Fatal("expected error for too many trailing args, got nil")
+	}
+}
+
+// --- containsFlag tests ---
+
+func TestContainsFlag(t *testing.T) {
+	tests := []struct {
+		s    string
+		flag string
+		want bool
+	}{
+		{"--full", "--full", true},
+		{"status all --full", "--full", true},
+		{"status --fullscreen all", "--full", false},
+		{"--full-output", "--full", false},
+		{"", "--full", false},
+		{"status all", "--full", false},
+		{"--full --verbose", "--full", true},
+	}
+	for _, tc := range tests {
+		got := containsFlag(tc.s, tc.flag)
+		if got != tc.want {
+			t.Errorf("containsFlag(%q, %q) = %v, want %v", tc.s, tc.flag, got, tc.want)
+		}
+	}
+}
+
+// --- README / code drift detection ---
+
+func TestReadmeCommandTable_ListsAllCommands(t *testing.T) {
+	readme, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Skipf("README.md not readable (ok in isolated test env): %v", err)
+	}
+	content := string(readme)
+	for _, cmd := range commands {
+		// Every command must appear as `| \x60name\x60 |` in the table
+		marker := "| `" + cmd.Name + "` |"
+		if !strings.Contains(content, marker) {
+			t.Errorf("command %q missing from README command table (expected %s)", cmd.Name, marker)
+		}
 	}
 }

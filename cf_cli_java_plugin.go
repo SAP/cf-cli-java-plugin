@@ -486,7 +486,7 @@ func (c *JavaPlugin) buildJstallArgs(command *Command, applicationName string, a
 
 		trailingArg := ""
 		if argumentLen > 2 {
-			trailingArg = arguments[2]
+			trailingArg = arguments[2] //nolint:gosec // G602: guarded by argumentLen > 2 check above
 			if strings.TrimSpace(trailingArg) == "" {
 				return "", &InvalidUsageError{message: fmt.Sprintf("%s trailing argument must not be empty", command.Name)}
 			}
@@ -505,7 +505,7 @@ func (c *JavaPlugin) buildJstallArgs(command *Command, applicationName string, a
 		jstallArgs = strings.TrimRight(jstallArgs, " ")
 	}
 
-	if options.Full && !strings.Contains(jstallArgs, "--full") {
+	if options.Full && !containsFlag(jstallArgs, "--full") {
 		// Only add --full when it is not already present to avoid duplication.
 		jstallArgs += " --full"
 		jstallArgs = strings.TrimLeft(jstallArgs, " ")
@@ -593,13 +593,13 @@ func (c *JavaPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 }
 
 // DoRun is an internal method used to wrap the cmd package with CommandExecutor for test purposes
-func (c *JavaPlugin) DoRun(cliConnection plugin.CliConnection, args []string) (string, error) {
+func (c *JavaPlugin) DoRun(cliConnection plugin.CliConnection, args []string) (string, error) { //nolint:unparam // cliConnection required by callers; kept for future use
 	traceLogger := trace.NewLogger(os.Stdout, true, os.Getenv("CF_TRACE"), "")
 	ui := terminal.NewUI(os.Stdin, os.Stdout, terminal.NewTeePrinter(os.Stdout), traceLogger)
 
 	c.logVerbosef("DoRun called with args: %v", args)
 
-	output, err := c.execute(cliConnection, args)
+	output, err := c.execute(args)
 	if err != nil {
 		if err.Error() == "unexpected EOF" {
 			return output, err
@@ -709,7 +709,7 @@ JVMMON_COMMAND=$(find -executable -name jvmmon | head -1 | tr -d [:space:])
 _pid=$(pidof java)
 if [ -n "${JMAP_COMMAND}" ]; then
 GZ_ARG=""
-if ${JMAP_COMMAND} -h 2>&1 | grep -q "gz="; then GZ_ARG=",gz=1"; fi
+if [ -n "@COMPRESS_FLAG" ] && ${JMAP_COMMAND} -h 2>&1 | grep -q "gz="; then GZ_ARG=",gz=1"; fi
 OUTPUT=$( ${JMAP_COMMAND} -dump:format=b${GZ_ARG},file=@FILE_NAME ${_pid} ) || STATUS_CODE=$?
 if [ ! -s @FILE_NAME ]; then echo >&2 ${OUTPUT}; exit 1; fi
 if [ ${STATUS_CODE:-0} -gt 0 ]; then echo >&2 ${OUTPUT}; exit ${STATUS_CODE}; fi
@@ -966,14 +966,12 @@ echo >&2 "jcmd not found. Install netcat (netcat-openbsd / nmap-ncat) for JRE-on
 	},
 	{
 		Name:              "status",
-		Description:       "Quick status check of the remote JVM: deadlock detection, hot threads, dependency graph, and more. Requires Java 17+ locally. Use --full for comprehensive analysis. Pass additional options via --args (e.g., '--dumps 3'). See https://github.com/parttimenerd/jstall",
 		IsLocal:           true,
 		SupportFullOption: true,
 		SSHCommand:        "status all @ARGS",
 	},
 	{
 		Name:              "jstall",
-		Description:       "Inspect the remote JVM via JStall (runs on your machine, connects via cf ssh). Requires Java 17+ locally. Subcommands typically require a target (e.g., 'all'). Pass jstall subcommands and options via --args. See https://github.com/parttimenerd/jstall",
 		IsLocal:           true,
 		SupportFullOption: true,
 		SSHCommand:        "@ARGS",
@@ -1069,29 +1067,27 @@ func showPluginHelp() error {
 }
 
 // findCommand resolves a subcommand by name, or returns a helpful usage error.
-func findCommand(cliConnection plugin.CliConnection, arguments []string) (*Command, error) {
+func findCommand(arguments []string) (*Command, error) {
 	name := strings.ToLower(arguments[0])
 	for i := range commands {
 		if commands[i].Name == name {
 			return &commands[i], nil
 		}
 	}
-	return nil, unknownCommandError(cliConnection, arguments)
+	return nil, unknownCommandError(arguments)
 }
 
-func unknownCommandError(cliConnection plugin.CliConnection, arguments []string) error {
+func unknownCommandError(arguments []string) error {
 	commandName := arguments[0]
 
-	// Detect swapped order: cf java MY-APP heap-dump instead of cf java heap-dump MY-APP
-	if len(arguments) >= 2 && cliConnection != nil {
+	// Detect swapped order: cf java MY-APP heap-dump instead of cf java heap-dump MY-APP.
+	// Suggest the swap without a live CF API call: a GetApp round-trip on every typo path
+	// hurts interactive usability and adds latency to error output.
+	if len(arguments) >= 2 {
 		secondArg := strings.ToLower(arguments[1])
 		for _, cmd := range commands {
 			if cmd.Name == secondArg {
-				// Confirm the first arg looks like an app name via CF API.
-				if _, appErr := cliConnection.GetApp(commandName); appErr == nil {
-					return &InvalidUsageError{message: fmt.Sprintf("Did you mean: cf java %s %s? (app and command appear to be swapped)", secondArg, commandName)}
-				}
-				break
+				return &InvalidUsageError{message: fmt.Sprintf("Did you mean: cf java %s %s? (app and command appear to be swapped)", secondArg, commandName)}
 			}
 		}
 	}
@@ -1128,6 +1124,17 @@ func warnAboutHeapDumpOnlyFlags(command *Command, options *Options) {
 			fmt.Fprintf(os.Stderr, "Warning: flag '--%s' is only supported by heap-dump and has no effect here.\n", f.name)
 		}
 	}
+}
+
+// containsFlag checks whether flag appears as a standalone whitespace-delimited
+// token in s. Unlike strings.Contains, this prevents "--fullscreen" from matching "--full".
+func containsFlag(s, flag string) bool {
+	for _, token := range strings.Fields(s) {
+		if token == flag {
+			return true
+		}
+	}
+	return false
 }
 
 func hasHelpFlag(arguments []string) bool {
@@ -1185,6 +1192,14 @@ func validateInvocation(command *Command, options *Options, arguments []string, 
 	// Indexes can't be negative (except -1 for "not set"), so fail with an error.
 	if options.AppInstanceIndex < -1 {
 		return &InvalidUsageError{message: fmt.Sprintf("Invalid application instance index %d, must be >= 0", options.AppInstanceIndex)}
+	}
+
+	// The nc_jcmd fallback path (JRE-only containers) sends the heap dump path as part of a
+	// space-delimited command string. The JVM splits the command on its first space to separate
+	// the diagnostic command name from its arguments, so a space in the container directory
+	// would truncate the path and cause GC.heap_dump to write to the wrong location.
+	if strings.Contains(options.ContainerDir, " ") {
+		return &InvalidUsageError{message: "Error: --container-dir must not contain spaces (required by the nc attach-socket fallback)"}
 	}
 	return nil
 }
@@ -1387,6 +1402,22 @@ func (c *JavaPlugin) collectGeneratedFile(ctx *commandContext) error {
 		fmt.Println("Successfully created " + ctx.command.FileLabel + " in application container at: " + ctx.fileName)
 		return nil
 	}
+
+	// jvmmon (SAP JVM) may produce a java_pid*.hprof.gz when --compress is set.
+	// ctx.fileExt is extHprof (jmap writes .hprof) so FindHeapDumpFile looked for
+	// *.hprof and found nothing. Retry with *.hprof.gz so jvmmon-compressed dumps
+	// are not silently lost.
+	if ctx.command.Name == cmdHeapDump && ctx.options.Compress && ctx.fileExt == extHprof {
+		gzFileName := strings.TrimSuffix(ctx.fileName, extHprof) + extHprofGz
+		gzFile, gzErr := utils.FindHeapDumpGzFile(ctx.sshArgs(), gzFileName, ctx.fspath, namePrefix)
+		if gzErr == nil && gzFile != "" {
+			ctx.fileName = gzFile
+			ctx.fileExt = extHprofGz
+			fmt.Println("Successfully created " + ctx.command.FileLabel + " in application container at: " + ctx.fileName)
+			return nil
+		}
+	}
+
 	if ctx.noDownload {
 		// Nothing is going to be fetched, so a missing file is not fatal here.
 		return nil
@@ -1406,16 +1437,18 @@ func (c *JavaPlugin) downloadGeneratedFile(ctx *commandContext) error {
 	localFileExt := ctx.fileExt
 	remoteIsGz := false
 
-	// For heap-dump via jmap: probe whether the remote file is gzip-compressed.
-	// jmap writes a .hprof filename but may fill it with gzip content when gz=1 is supported.
-	if isHeapDump && ctx.fileExt == extHprof {
+	// For heap-dump via jmap with --compress: probe whether the remote file is actually
+	// gzip-compressed. jmap writes a .hprof filename but fills it with gzip content when
+	// gz=1 is supported (JDK 17+). Without --compress the shell script skips gz=1,
+	// so the file is always plain HPROF and the probe is unnecessary.
+	if isHeapDump && ctx.fileExt == extHprof && ctx.options.Compress {
 		remoteIsGz, _ = utils.ProbeRemoteFileGzip(ctx.sshArgs(), ctx.fileName)
 		c.logVerbosef("Remote file is gzip-compressed: %t", remoteIsGz)
 		switch {
-		case remoteIsGz && ctx.options.Compress:
+		case remoteIsGz:
 			// User asked for .hprof.gz locally -> keep compressed
 			localFileExt = extHprofGz
-		case !remoteIsGz && ctx.options.Compress:
+		default:
 			fmt.Fprintf(os.Stderr, "Warning: remote jmap does not support gz compression (JDK 17+ required); downloading uncompressed\n")
 		}
 	}
@@ -1451,13 +1484,16 @@ func (c *JavaPlugin) downloadRedactedHeapDump(ctx *commandContext, localPath str
 	if err != nil {
 		return err
 	}
+	// stream is the reader passed to hprof-redact. When remoteIsGz, it is a
+	// gzip.Reader wrapping reader. gzip.Reader.Close() does NOT close the
+	// underlying reader, so we always close reader explicitly at the end.
 	stream := reader
 	if remoteIsGz {
 		// Remote jmap used gz=1; decompress before passing to hprof-redact
 		// which expects uncompressed HPROF format.
-		gz, gzErr := gzip.NewReader(stream)
+		gz, gzErr := gzip.NewReader(reader)
 		if gzErr != nil {
-			_ = stream.Close()
+			_ = reader.Close()
 			_ = waitRemote()
 			return fmt.Errorf("gzip header error on remote heap dump: %w", gzErr)
 		}
@@ -1466,6 +1502,13 @@ func (c *JavaPlugin) downloadRedactedHeapDump(ctx *commandContext, localPath str
 
 	finalPath, redactErr := pipeHeapDumpThroughRedact(redactBin, stream, localPath, mode, ctx.options.RedactKeepOnError)
 	closeErr := stream.Close()
+	// Always close the underlying pipe reader: gzip.Reader.Close() does not
+	// propagate to the reader it wraps, so this is a no-op for non-gz paths
+	// (stream == reader) and necessary for gz paths.
+	readerCloseErr := reader.Close()
+	if closeErr == nil {
+		closeErr = readerCloseErr
+	}
 	waitErr := waitRemote()
 	if redactErr != nil {
 		return combineHeapDumpStreamErrors(redactErr, closeErr, waitErr)
@@ -1558,7 +1601,7 @@ func (c *JavaPlugin) deleteRemoteArtifact(ctx *commandContext, path, successMess
 // execute runs one `cf java` invocation as a pipeline:
 // lifecycle -> parse -> resolve command -> validate -> dispatch (local or SSH) ->
 // run -> download -> clean up.
-func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) (string, error) {
+func (c *JavaPlugin) execute(args []string) (string, error) {
 	if handled, err := handleCLILifecycle(args); handled {
 		return "", err
 	}
@@ -1585,7 +1628,7 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 		return "", showPluginHelp()
 	}
 
-	command, err := findCommand(cliConnection, arguments)
+	command, err := findCommand(arguments)
 	if err != nil {
 		return "", err
 	}
@@ -1599,8 +1642,10 @@ func (c *JavaPlugin) execute(cliConnection plugin.CliConnection, args []string) 
 	}
 
 	// `cf java jstall APP --help` is forwarded straight to jstall's own help.
+	// Use appInstanceIndex=-1 (not set) so buildJstallArgs uses --cf rather than
+	// constructing a malformed --ssh argument with an empty app name.
 	if command.Name == "jstall" && hasHelpFlag(arguments) {
-		return c.executeJstall("", "--help", 0, false)
+		return c.executeJstall("", "--help", -1, false)
 	}
 
 	if err := validateInvocation(command, options, arguments, localDir); err != nil {

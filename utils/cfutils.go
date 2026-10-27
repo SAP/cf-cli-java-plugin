@@ -21,7 +21,7 @@ import (
 )
 
 func shellSingleQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `"'"'`) + "'"
+	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
 }
 
 // ShellSingleQuote wraps s in single quotes for safe embedding in a shell command string.
@@ -383,9 +383,13 @@ func FindFile(args []string, fullpath string, fspath string, pattern string, nam
 	findPattern := pattern
 	if namePrefix != "" {
 		ext := pattern[1:] // e.g., "*.jfr" -> ".jfr"
+		// shellSingleQuote handles any single quotes in namePrefix (e.g. app names
+		// like "it's-app") so they don't break the remote shell command.
 		findPattern = namePrefix + "*" + ext
 	}
-	cmd := " [ -f '" + fullpath + "' ] && echo '" + fullpath + "' ||  find \"" + fspath + "\" -name '" + findPattern + "' -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1 "
+	// Use shellSingleQuote for fullpath and fspath to handle paths with single
+	// quotes or other shell metacharacters (e.g. volume-mount paths).
+	cmd := " [ -f " + shellSingleQuote(fullpath) + " ] && echo " + shellSingleQuote(fullpath) + " ||  find " + shellSingleQuote(fspath) + " -name " + shellSingleQuote(findPattern) + " -printf '%T@ %p\\0' | sort -zk 1nr | sed -z 's/^[^ ]* //' | tr '\\0' '\\n' | head -n 1 "
 
 	args = append(args, cmd)
 	output, err := exec.Command("cf", args...).Output()
