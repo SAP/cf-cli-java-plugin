@@ -328,11 +328,11 @@ func TestContainsFlag(t *testing.T) {
 
 // --- README / code drift detection ---
 
-func TestHelpFlag_PrintsDescriptionAndExits(t *testing.T) {
+func TestHelpSubcommand_PrintsDescriptionAndExits(t *testing.T) {
 	p := &JavaPlugin{}
-	out, err := p.execute([]string{cmdJava, cmdHeapDump, "--help"})
+	out, err := p.execute([]string{cmdJava, "help", cmdHeapDump})
 	if err != nil {
-		t.Fatalf("expected no error for --help, got: %v", err)
+		t.Fatalf("expected no error for help subcommand, got: %v", err)
 	}
 	if !strings.Contains(out, cmdHeapDump) {
 		t.Errorf("expected output to contain command name %q, got: %s", cmdHeapDump, out)
@@ -343,49 +343,29 @@ func TestHelpFlag_PrintsDescriptionAndExits(t *testing.T) {
 	}
 }
 
-func TestHelpFlag_ShortForm(t *testing.T) {
+func TestHelpSubcommand_HeapDumpShowsHeapDumpFlags(t *testing.T) {
 	p := &JavaPlugin{}
-	out, err := p.execute([]string{cmdJava, cmdHeapDump, "-h"})
-	if err != nil {
-		t.Fatalf("expected no error for -h, got: %v", err)
-	}
-	if !strings.Contains(out, cmdHeapDump) {
-		t.Errorf("expected output to contain command name, got: %s", out)
-	}
-}
-
-func TestHelpFlag_HeapDumpShowsHeapDumpFlags(t *testing.T) {
-	p := &JavaPlugin{}
-	out, err := p.execute([]string{cmdJava, cmdHeapDump, "--help"})
+	out, err := p.execute([]string{cmdJava, "help", cmdHeapDump})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	for _, flag := range []string{"--redact", "--compress", "--keep", "--local-dir"} {
 		if !strings.Contains(out, flag) {
-			t.Errorf("expected heap-dump --help to list %s, got: %s", flag, out)
+			t.Errorf("expected help heap-dump to list %s, got: %s", flag, out)
 		}
 	}
 }
 
-func TestHelpFlag_StatusDoesNotShowHeapDumpFlags(t *testing.T) {
+func TestHelpSubcommand_StatusDoesNotShowHeapDumpFlags(t *testing.T) {
 	p := &JavaPlugin{}
-	out, err := p.execute([]string{cmdJava, "status", "--help"})
+	out, err := p.execute([]string{cmdJava, "help", "status"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	for _, flag := range []string{"--redact", "--compress", "--keep", "--local-dir"} {
 		if strings.Contains(out, flag) {
-			t.Errorf("expected status --help NOT to list %s, got: %s", flag, out)
+			t.Errorf("expected help status NOT to list %s, got: %s", flag, out)
 		}
-	}
-}
-
-func TestHelpFlag_AppNameNotRequired(t *testing.T) {
-	// `cf java heap-dump --help` (no app name) should work
-	p := &JavaPlugin{}
-	_, err := p.execute([]string{cmdJava, cmdHeapDump, "--help"})
-	if err != nil {
-		t.Fatalf("--help without app name should not error, got: %v", err)
 	}
 }
 

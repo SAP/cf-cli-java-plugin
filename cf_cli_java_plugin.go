@@ -1205,25 +1205,6 @@ func containsFlag(s, flag string) bool {
 	return false
 }
 
-func hasHelpFlag(arguments []string) bool {
-	for _, arg := range arguments {
-		if arg == "--help" || arg == "-h" {
-			return true
-		}
-	}
-	return false
-}
-
-func removeHelpFlags(args []string) []string {
-	out := make([]string, 0, len(args))
-	for _, arg := range args {
-		if arg != "--help" && arg != "-h" {
-			out = append(out, arg)
-		}
-	}
-	return out
-}
-
 // validateInvocation rejects unsupported flag/argument combinations. The order of
 // the checks is significant: it decides which error a user sees when several apply.
 func validateInvocation(command *Command, options *Options, arguments []string, localDir string) error {
@@ -1683,14 +1664,7 @@ func (c *JavaPlugin) execute(args []string) (string, error) {
 		return "", err
 	}
 
-	// Strip --help/-h before flag parsing so the flag parser doesn't reject them.
-	// We act on them after resolving the command.
 	innerArgs := args[1:]
-	wantsHelp := hasHelpFlag(innerArgs)
-	if wantsHelp {
-		innerArgs = removeHelpFlags(innerArgs)
-	}
-
 	options, arguments, parseErr := c.parseOptions(innerArgs)
 	if parseErr != nil {
 		return "", &InvalidUsageError{message: fmt.Sprintf("Error while parsing command arguments: %v", parseErr)}
@@ -1708,8 +1682,22 @@ func (c *JavaPlugin) execute(args []string) (string, error) {
 		return "", &InvalidUsageError{message: "No command provided"}
 	}
 
-	// 'help' is not a real subcommand, it just forwards to `cf help java`.
+	// 'help' is not a real subcommand: 'cf java help' forwards to `cf help java`,
+	// 'cf java help <subcommand>' shows subcommand-specific help.
+	// Note: `cf java <subcommand> --help` is intercepted by the CF CLI and never reaches here.
 	if strings.ToLower(arguments[0]) == "help" {
+		if len(arguments) >= 2 {
+			sub := &Command{}
+			for i := range commands {
+				if commands[i].Name == strings.ToLower(arguments[1]) {
+					sub = &commands[i]
+					break
+				}
+			}
+			if sub.Name != "" {
+				return showCommandHelp(sub), nil
+			}
+		}
 		return "", showPluginHelp()
 	}
 
@@ -1724,14 +1712,6 @@ func (c *JavaPlugin) execute(args []string) (string, error) {
 	// Only block CF_TRACE for commands that download files (not for read-only commands like vm-version)
 	if os.Getenv("CF_TRACE") == "true" && (command.GenerateFiles || command.GenerateArbitraryFiles) {
 		return "", errors.New("the environment variable CF_TRACE is set to true. This prevents download of the dump from succeeding")
-	}
-
-	// --help: jstall forwards to its own binary; all other commands print built-in help.
-	if wantsHelp {
-		if command.Name == "jstall" {
-			return c.executeJstall("", "--help", -1, false)
-		}
-		return showCommandHelp(command), nil
 	}
 
 	if err := validateInvocation(command, options, arguments, localDir); err != nil {
