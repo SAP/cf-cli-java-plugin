@@ -328,6 +328,67 @@ func TestContainsFlag(t *testing.T) {
 
 // --- README / code drift detection ---
 
+func TestHelpFlag_PrintsDescriptionAndExits(t *testing.T) {
+	p := &JavaPlugin{}
+	out, err := p.execute([]string{cmdJava, cmdHeapDump, "--help"})
+	if err != nil {
+		t.Fatalf("expected no error for --help, got: %v", err)
+	}
+	if !strings.Contains(out, cmdHeapDump) {
+		t.Errorf("expected output to contain command name %q, got: %s", cmdHeapDump, out)
+	}
+	cmd := findTestCommand(t, cmdHeapDump)
+	if !strings.Contains(out, cmd.Description) {
+		t.Errorf("expected output to contain description, got: %s", out)
+	}
+}
+
+func TestHelpFlag_ShortForm(t *testing.T) {
+	p := &JavaPlugin{}
+	out, err := p.execute([]string{cmdJava, cmdHeapDump, "-h"})
+	if err != nil {
+		t.Fatalf("expected no error for -h, got: %v", err)
+	}
+	if !strings.Contains(out, cmdHeapDump) {
+		t.Errorf("expected output to contain command name, got: %s", out)
+	}
+}
+
+func TestHelpFlag_HeapDumpShowsHeapDumpFlags(t *testing.T) {
+	p := &JavaPlugin{}
+	out, err := p.execute([]string{cmdJava, cmdHeapDump, "--help"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, flag := range []string{"--redact", "--compress", "--keep", "--local-dir"} {
+		if !strings.Contains(out, flag) {
+			t.Errorf("expected heap-dump --help to list %s, got: %s", flag, out)
+		}
+	}
+}
+
+func TestHelpFlag_StatusDoesNotShowHeapDumpFlags(t *testing.T) {
+	p := &JavaPlugin{}
+	out, err := p.execute([]string{cmdJava, "status", "--help"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, flag := range []string{"--redact", "--compress", "--keep", "--local-dir"} {
+		if strings.Contains(out, flag) {
+			t.Errorf("expected status --help NOT to list %s, got: %s", flag, out)
+		}
+	}
+}
+
+func TestHelpFlag_AppNameNotRequired(t *testing.T) {
+	// `cf java heap-dump --help` (no app name) should work
+	p := &JavaPlugin{}
+	_, err := p.execute([]string{cmdJava, cmdHeapDump, "--help"})
+	if err != nil {
+		t.Fatalf("--help without app name should not error, got: %v", err)
+	}
+}
+
 func TestReadmeCommandTable_ListsAllCommands(t *testing.T) {
 	readme, err := os.ReadFile("README.md")
 	if err != nil {

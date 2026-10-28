@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- Per-subcommand help: `cf java <subcommand> --help` (or `-h`) prints the command's description and the
+  flags it actually accepts. `cf java jstall --help` forwards to jstall's own help output as before.
 - Bundle [jstall](https://github.com/parttimenerd/jstall) v0.8.8 (jstall-minimal.jar) for one-shot JVM
   inspection via `cf java jstall APP_NAME`. Requires Java 17+ locally. Key subcommands: `status` (thread
   analysis, metaspace, GC, compiler queue), `record-status` (repeated sampling), `flame-graph`, `heap-info`.

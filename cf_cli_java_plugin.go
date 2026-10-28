@@ -1073,6 +1073,67 @@ func showPluginHelp() error {
 	return nil
 }
 
+// applicableFlagNames returns the flag names relevant to a given command,
+// mirroring the rejection rules in validateInvocation and warnAboutHeapDumpOnlyFlags.
+func applicableFlagNames(command *Command) map[string]bool {
+	names := map[string]bool{
+		"app-instance-index": true,
+		"dry-run":            true,
+		"verbose":            true,
+	}
+	if command.GenerateFiles || command.GenerateArbitraryFiles {
+		names[flagKeep] = true
+		names[flagNoDownload] = true
+		names[flagContainerDir] = true
+		names[flagLocalDir] = true
+	}
+	if command.SupportFullOption {
+		names["full"] = true
+	}
+	if command.HasMiscArgs() {
+		names["args"] = true
+	}
+	if command.Name == cmdHeapDump {
+		names[flagRedact] = true
+		names[flagRedactComplete] = true
+		names[flagRedactKeepOnError] = true
+		names[flagCompress] = true
+		names[flagOpen] = true
+		names[flagOpenURL] = true
+	}
+	return names
+}
+
+func showCommandHelp(command *Command) string {
+	const col = 30 // description starts at this column
+	var b strings.Builder
+	usage := "cf java " + command.Name + " APP"
+	if command.AcceptsTrailingArgs {
+		usage += " [args...]"
+	}
+	usage += " [options]"
+	b.WriteString(usage + "\n\n")
+	b.WriteString(utils.WrapTextWithPrefix(command.Description, "  ", 80, 0) + "\n")
+
+	applicable := applicableFlagNames(command)
+	b.WriteString("\nOptions:\n")
+	for _, flagDef := range flagDefinitions {
+		if !applicable[flagDef.Name] {
+			continue
+		}
+		var label string
+		if flagDef.ShortName != "" {
+			label = "-" + flagDef.ShortName + ", --" + flagDef.Name
+		} else {
+			label = "    --" + flagDef.Name
+		}
+		// Pad label to col-2 (leaving 2-char left margin from "  "), then add description.
+		padded := fmt.Sprintf("  %-*s", col-2, label)
+		b.WriteString(utils.WrapTextWithPrefix(flagDef.Description, padded, 80, 0) + "\n")
+	}
+	return b.String()
+}
+
 // findCommand resolves a subcommand by name, or returns a helpful usage error.
 func findCommand(arguments []string) (*Command, error) {
 	name := strings.ToLower(arguments[0])
@@ -1151,6 +1212,16 @@ func hasHelpFlag(arguments []string) bool {
 		}
 	}
 	return false
+}
+
+func removeHelpFlags(args []string) []string {
+	out := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg != "--help" && arg != "-h" {
+			out = append(out, arg)
+		}
+	}
+	return out
 }
 
 // validateInvocation rejects unsupported flag/argument combinations. The order of
@@ -1612,7 +1683,15 @@ func (c *JavaPlugin) execute(args []string) (string, error) {
 		return "", err
 	}
 
-	options, arguments, parseErr := c.parseOptions(args[1:])
+	// Strip --help/-h before flag parsing so the flag parser doesn't reject them.
+	// We act on them after resolving the command.
+	innerArgs := args[1:]
+	wantsHelp := hasHelpFlag(innerArgs)
+	if wantsHelp {
+		innerArgs = removeHelpFlags(innerArgs)
+	}
+
+	options, arguments, parseErr := c.parseOptions(innerArgs)
 	if parseErr != nil {
 		return "", &InvalidUsageError{message: fmt.Sprintf("Error while parsing command arguments: %v", parseErr)}
 	}
@@ -1647,11 +1726,12 @@ func (c *JavaPlugin) execute(args []string) (string, error) {
 		return "", errors.New("the environment variable CF_TRACE is set to true. This prevents download of the dump from succeeding")
 	}
 
-	// `cf java jstall APP --help` is forwarded straight to jstall's own help.
-	// Use appInstanceIndex=-1 (not set) so buildJstallArgs uses --cf rather than
-	// constructing a malformed --ssh argument with an empty app name.
-	if command.Name == "jstall" && hasHelpFlag(arguments) {
-		return c.executeJstall("", "--help", -1, false)
+	// --help: jstall forwards to its own binary; all other commands print built-in help.
+	if wantsHelp {
+		if command.Name == "jstall" {
+			return c.executeJstall("", "--help", -1, false)
+		}
+		return showCommandHelp(command), nil
 	}
 
 	if err := validateInvocation(command, options, arguments, localDir); err != nil {
