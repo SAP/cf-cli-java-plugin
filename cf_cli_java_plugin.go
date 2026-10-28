@@ -610,8 +610,10 @@ func (c *JavaPlugin) DoRun(cliConnection plugin.CliConnection, args []string) (s
 		if errors.As(err, &invalidUsageErr) {
 			fmt.Println()
 			fmt.Println()
-			err := exec.Command("cf", "help", cmdJava).Run()
-			if err != nil {
+			helpCmd := exec.Command("cf", "help", cmdJava)
+			helpCmd.Stdout = os.Stdout
+			helpCmd.Stderr = os.Stderr
+			if err := helpCmd.Run(); err != nil {
 				ui.Failed("Failed to show help")
 			}
 		}
@@ -966,12 +968,14 @@ echo >&2 "jcmd not found. Install netcat (netcat-openbsd / nmap-ncat) for JRE-on
 	},
 	{
 		Name:              "status",
+		Description:       "Quick status check of the remote JVM: deadlock detection, hot threads, dependency graph, and more. Requires Java 17+ locally. Use --full for comprehensive analysis. Pass additional options via --args (e.g., '--dumps 3'). See https://github.com/parttimenerd/jstall",
 		IsLocal:           true,
 		SupportFullOption: true,
 		SSHCommand:        "status all @ARGS",
 	},
 	{
 		Name:              "jstall",
+		Description:       "Inspect the remote JVM via JStall (runs on your machine, connects via cf ssh). Requires Java 17+ locally. Subcommands typically require a target (e.g., 'all'). Pass jstall subcommands and options via --args. See https://github.com/parttimenerd/jstall",
 		IsLocal:           true,
 		SupportFullOption: true,
 		SSHCommand:        "@ARGS",
@@ -1060,7 +1064,10 @@ func resolveLocalDir(localDir string) (string, error) {
 }
 
 func showPluginHelp() error {
-	if err := exec.Command("cf", "help", cmdJava).Run(); err != nil {
+	cmd := exec.Command("cf", "help", cmdJava)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to show help: %w", err)
 	}
 	return nil
@@ -1502,12 +1509,11 @@ func (c *JavaPlugin) downloadRedactedHeapDump(ctx *commandContext, localPath str
 
 	finalPath, redactErr := pipeHeapDumpThroughRedact(redactBin, stream, localPath, mode, ctx.options.RedactKeepOnError)
 	closeErr := stream.Close()
-	// Always close the underlying pipe reader: gzip.Reader.Close() does not
-	// propagate to the reader it wraps, so this is a no-op for non-gz paths
-	// (stream == reader) and necessary for gz paths.
-	readerCloseErr := reader.Close()
-	if closeErr == nil {
-		closeErr = readerCloseErr
+	if remoteIsGz {
+		// gzip.Reader.Close() does not close the underlying reader; close it here.
+		if readerCloseErr := reader.Close(); closeErr == nil {
+			closeErr = readerCloseErr
+		}
 	}
 	waitErr := waitRemote()
 	if redactErr != nil {
