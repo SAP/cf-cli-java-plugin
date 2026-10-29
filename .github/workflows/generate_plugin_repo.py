@@ -22,33 +22,36 @@ def generate_plugin_repo_yaml(version: str):
     """Generate the plugin repository YAML file."""
     repo_url = "https://github.com/SAP/cf-cli-java-plugin"
     
-    # Define the binary platforms and their corresponding file extensions
+    # CF Community repository platform IDs are linux64, osx and win64;
+    # Linux arm64 is distributed as a manual-download GitHub Release asset.
     platforms = {
         "linux64": "cf-cli-java-plugin-linux-amd64",
         "osx": "cf-cli-java-plugin-macos-arm64", 
-        "win64": "cf-cli-java-plugin-windows-amd64"
+        "win64": "cf-cli-java-plugin-windows-amd64.exe"
     }
     
     binaries = []
     dist_dir = Path("dist")
+
+    missing = [
+        str(dist_dir / filename)
+        for filename in platforms.values()
+        if not (dist_dir / filename).is_file() or (dist_dir / filename).stat().st_size == 0
+    ]
+    if missing:
+        print(f"Error: Missing or empty required plugin binaries: {', '.join(missing)}", file=sys.stderr)
+        sys.exit(1)
     
     for platform, filename in platforms.items():
         file_path = dist_dir / filename
-        if file_path.exists():
-            checksum = calculate_sha1(file_path)
-            binary_info = {
-                "checksum": checksum,
-                "platform": platform,
-                "url": f"{repo_url}/releases/download/{version}/{filename}"
-            }
-            binaries.append(binary_info)
-            print(f"Added {platform}: {filename} (checksum: {checksum})")
-        else:
-            print(f"Warning: Binary not found for {platform}: {filename}")
-    
-    if not binaries:
-        print("Error: No binaries found in dist/ directory")
-        sys.exit(1)
+        checksum = calculate_sha1(file_path)
+        binary_info = {
+            "checksum": checksum,
+            "platform": platform,
+            "url": f"{repo_url}/releases/download/{version}/{filename}"
+        }
+        binaries.append(binary_info)
+        print(f"Added {platform}: {filename} (checksum: {checksum})")
     
     # Create the plugin repository entry
     plugin_entry = [{
@@ -89,7 +92,7 @@ def generate_plugin_repo_yaml(version: str):
         for binary in binaries:
             f.write(f"  {binary['platform']}: {binary['checksum']}\n")
         f.write(f"\nRepository URL: {repo_url}\n")
-        f.write(f"Release URL: {repo_url}/releases/tag/v{version}\n")
+        f.write(f"Release URL: {repo_url}/releases/tag/{version}\n")
     
     print(f"Generated summary file: {summary_file}")
 

@@ -676,6 +676,42 @@ Centralized linting scripts:
 - Automated linting and testing on PRs
 - Pre-commit hooks with auto-formatting
 
+### Creating a Release (Maintainers)
+
+Use the **Release** workflow in GitHub Actions and choose **Run workflow** on the default branch. Enter a version such as
+`4.0.4` or `4.0.4-rc1` (no `v` prefix). The workflow needs permission to push commits and tags; publishing may also require
+approval for the `release` environment. Do not manually move or force-push an existing release tag.
+
+1. Prepare and merge the desired source changes. For a **new final version**, add release notes under
+  `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md), or write an existing `## [VERSION]` section there. An empty
+  Unreleased section is only valid when the requested version already has its own nonempty section.
+2. Run the workflow with the intended version. For a new tag, it updates the Go plugin version, promotes a nonempty
+  Unreleased section if there is no version section yet, commits the release notes and changelog, and pushes the tag.
+  For an **RC**, the base version's changelog section must already exist; the Go version and changelog remain unchanged.
+  RC GitHub Releases are marked as prereleases.
+3. Wait for the **Prepare release**, platform **Build**, and **Publish GitHub Release** jobs to finish. Verify the
+  published release has macOS ARM64, Linux AMD64/ARM64 and Windows AMD64 (`.exe`) plugin binaries, the generated
+  release notes, and `plugin-repo-entry.yml`. The workflow uploads everything to a draft before publishing, so the
+  plugin-repository workflow only runs after the assets are complete and skips generating files already attached.
+
+Linux ARM64 is a manual-download GitHub Release asset. This plugin's CF Community repository entry uses the
+`linux64`, `osx` and `win64` platform identifiers; the repository index has no Linux ARM64 identifier.
+
+If the tag **already exists but the GitHub Release does not** (for example `4.0.3`), run the same manual workflow with
+that version: it builds the exact tagged commit, reads its existing version section in the changelog, and publishes
+without moving the tag or changing source files. This is also the safe retry path when publishing fails after a tag
+was pushed. A failed asset upload may leave an incomplete **draft** release; rerun the manual workflow for that tag to
+complete and publish it. The workflow refuses to overwrite an already **published** release. Release runs are
+serialized to prevent concurrent uploads. A manually pushed tag can trigger the same release workflow, but using
+**Run workflow** is the recommended path.
+
+Before a new release, the release-script regression tests can be run locally without a CF environment (they require
+Python and PyYAML). The release workflow also runs them automatically:
+
+```bash
+python3 -m unittest discover -s .github/workflows -p 'test_*.py' -v
+```
+
 ## Support, Feedback, Contributing
 
 This project is open to feature requests/suggestions, bug reports etc. via

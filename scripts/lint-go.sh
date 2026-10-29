@@ -162,24 +162,26 @@ case "$MODE" in
         
     "ci")
         print_info "Running CI checks for Go..."
-        
-        echo "🔍 Installing dependencies..."
-        go mod tidy -e || true
-        
-        echo "🔍 Running gofumpt..."
-        if command -v gofumpt >/dev/null 2>&1; then
-            if ! gofumpt -l -w *.go cmd/ utils/; then
-                print_error "Go formatting issues found with gofumpt"
-                exit 1
-            fi
-        else
-            echo "🔍 Running go fmt..."
-            if ! go fmt ./...; then
-                print_error "Go formatting issues found"
-                exit 1
-            fi
+
+        # CI must never rewrite tagged source before building release binaries.
+        GO_FILES=$(git ls-files '*.go')
+        if [ -z "$GO_FILES" ]; then
+            print_error "No Git-tracked Go files found"
+            exit 1
         fi
-        
+
+        echo "🔍 Checking Go formatting..."
+        if command -v gofumpt >/dev/null 2>&1; then
+            UNFORMATTED_FILES=$(echo "$GO_FILES" | xargs gofumpt -l)
+        else
+            UNFORMATTED_FILES=$(echo "$GO_FILES" | xargs gofmt -l)
+        fi
+        if [ -n "$UNFORMATTED_FILES" ]; then
+            print_error "Go formatting issues found:"
+            echo "$UNFORMATTED_FILES"
+            exit 1
+        fi
+
         echo "🔍 Running go vet..."
         if ! go vet .; then
             print_error "Go vet issues found"
