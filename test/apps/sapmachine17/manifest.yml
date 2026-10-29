@@ -2,12 +2,13 @@
 applications:
 - name: sapmachine17
   random-route: true
-  path: test.jar
-  memory: 512M
-  buildpacks: 
+  path: workload.jar
+  memory: 256M
+  health-check-type: http
+  health-check-http-endpoint: /health
+  buildpacks:
   - sap_java_buildpack_jakarta
   env:
-    TARGET_RUNTIME: tomcat
     JBP_CONFIG_COMPONENTS: "jres: ['com.sap.xs.java.buildpack.jdk.SAPMachineJDK']"
-    JBP_CONFIG_SAP_MACHINE_JDK : "{ version: 17.+ }"
+    JBP_CONFIG_SAP_MACHINE_JDK: "{ version: 17.+ }"
     JBP_CONFIG_JAVA_OPTS: "[java_opts: '-XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints']"

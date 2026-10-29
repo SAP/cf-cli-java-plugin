@@ -19,7 +19,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go-version: [">=1.23.5"]
+        go-version: ["1.26.9"]
 
     steps:
       - name: Checkout code
@@ -44,7 +44,16 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          curl -fsSL -o dist/jstall-minimal.jar https://github.com/parttimenerd/jstall/releases/latest/download/jstall-minimal.jar
+          gh release download -R parttimenerd/jstall -p jstall-minimal.jar -D dist --clobber
+          expected=$(gh release view --repo parttimenerd/jstall --json tagName --jq '.tagName' | sed 's/^v//')
+          actual=$(java -jar dist/jstall-minimal.jar --version 2>&1 | head -1)
+          echo "Expected jstall version: $expected, JAR reports: $actual"
+          if [ "$actual" != "$expected" ]; then
+            echo "ERROR: jstall-minimal.jar reports version $actual but latest release is $expected" >&2
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies
         run: go mod tidy -e || true
@@ -64,7 +73,7 @@ jobs:
         run: python3 .github/workflows/build.py
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: binaries-${{ matrix.os }}
           path: dist/
@@ -95,13 +104,15 @@ jobs:
           pip install PyYAML requests
 
       - name: Parse version and update Go source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Parse version input (e.g., "4.1.0" -> major=4, minor=1, build=0)
           VERSION="${{ github.event.inputs.version }}"
           IFS='.' read -r MAJOR MINOR BUILD <<< "$VERSION"
           
           # Determine the bundled JStall version
-          export JSTALL_VERSION=$(curl -s https://api.github.com/repos/parttimenerd/jstall/releases/latest | python3 -c "import sys,json; print(json.load(sys.stdin).get('tag_name','unknown'))")
+          export JSTALL_VERSION=$(gh run list -R parttimenerd/jstall --branch main --limit 1 --json headSha,databaseId --jq '.[0] | "main@" + (.headSha[:8]) + " (run " + (.databaseId|tostring) + ")"')
           echo "Bundled JStall version: $JSTALL_VERSION"
 
           echo "Updating version to $MAJOR.$MINOR.$BUILD"
@@ -130,7 +141,7 @@ jobs:
           git push origin "$VERSION"
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts/
 

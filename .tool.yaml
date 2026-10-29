@@ -2,7 +2,8 @@ tag: ready
 github_url: https://github.com/SAP/cf-cli-java-plugin
 tagline: Cloud Foundry CLI plugin to troubleshoot Java apps running on CF without SSH. Trigger heap
   dumps, thread dumps, and async-profiler or JFR recordings from the cf command line, with results
-  streamed back to your machine. Also embeds jstall for full JVM inspection via `cf java jstall`.
+  streamed back to your machine. Heap dumps can be redacted during download, kept compressed, or
+  opened directly in hprof-analyzer. Also embeds jstall for full JVM inspection via `cf java jstall`.
 tagline_short: Trigger heap dumps, thread dumps, and profiles from the CF CLI — no SSH needed.
 when_to_use:
 - You run Java apps on Cloud Foundry and need heap dumps, thread dumps, or CPU profiles
@@ -23,7 +24,8 @@ install:
   code: |
     # Pick the binary for your platform:
     cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/latest/download/cf-cli-java-plugin-macos-arm64
-    # linux-amd64 / linux-arm64 / windows-amd64 also available
+    # linux-amd64 / linux-arm64 / windows-amd64 / windows-arm64 also available
+    # macOS requires Apple Silicon; macOS Intel (darwin/amd64) is not supported
 - label: CF Community
   lang: bash
   code: |
@@ -34,8 +36,19 @@ usage:
   lang: bash
   code: |
     cf java heap-dump my-app
+    cf java heap-dump my-app --redact --open
+    cf java heap-dump my-app --redact --compress
     cf java thread-dump my-app
     cf java jstall my-app
+features:
+- title: Stream heap dumps directly to your machine
+  body: Capture heap dumps and thread dumps from Cloud Foundry apps without manual SSH sessions.
+- title: Redact sensitive heap-dump data during download
+  body: Use `--redact` or `--redact-complete` to zero sensitive primitive data while the dump is being streamed, so an unredacted heap dump is never written locally.
+- title: Keep dumps compressed or open them immediately
+  body: Use `--compress` to save `.hprof.gz` files directly, or `--open` / `--open-url` to inspect the heap dump in hprof-analyzer right after download.
+- title: Run bundled jstall diagnostics
+  body: Inspect deadlocks, hot threads, flame graphs, and more via `cf java jstall` without separately installing jstall.
 how_to:
 - title: My CF app is not responding — find what it is stuck on
   body: |
@@ -80,9 +93,13 @@ how_to:
     Take a heap dump from the running (or restarted) instance and download it:
     ```bash
     cf java heap-dump $APP_NAME
-    # Downloads $APP_NAME-heapdump-<random>.hprof to current directory
     ```
     Analyse with hprof-analyzer for Leak Suspects and Top Consumers:
+    ```bash
+    cf java heap-dump $APP_NAME --open
+    # Opens hprof-analyzer in the browser with the dump pre-loaded
+    ```
+    Or download and open manually:
     ```bash
     hprof-analyzer $APP_NAME-heapdump-*.hprof report.html
     # Open report.html → "Leak Suspects" and "Top Consumers" tabs
@@ -97,8 +114,22 @@ how_to:
     cf java heap-dump $APP_NAME
     ```
     Downloads `$APP_NAME-heapdump-<random>.hprof` to your current directory.
-    Open it in VisualVM, Eclipse MAT, or IntelliJ's heap analyzer.
-
+    Open it in VisualVM, Eclipse MAT, IntelliJ's heap analyzer, or directly in the browser:
+    ```bash
+    cf java heap-dump $APP_NAME --open
+    # Spins up a local server and opens hprof-analyzer in the browser automatically.
+    # On macOS with the Application Firewall enabled, click Allow when prompted.
+    # In the browsers, allow the page to access local services when prompted.
+    ```
+    To remove sensitive data (passwords, tokens) before saving:
+    ```bash
+    cf java heap-dump $APP_NAME --redact            # lean: zeros primitive arrays
+    cf java heap-dump $APP_NAME --redact-complete   # complete: zeros all primitive values
+    ```
+    To keep the local file compressed as .hprof.gz (transfer is already gzip-compressed on JDK 17+):
+    ```bash
+    cf java heap-dump $APP_NAME --compress          # saves as .hprof.gz
+    ```
     **Note:** requires jmap, which is not bundled by default in the CF Java Buildpack.
     Add a full JDK via `JBP_CONFIG_OPEN_JDK_JRE: '[jre: {version: 21.+}, jdk: {include: true}]'`
     to your app's environment if you see a "jmap not found" error.
@@ -163,5 +194,62 @@ how_to:
     ```bash
     jstall --cf $APP_NAME status all
     ```
+
+- title: Redact sensitive data from a heap dump
+  body: |
+    The plugin can zero out sensitive values (passwords, tokens, personal data) before
+    saving the dump locally, using the bundled hprof-redact tool:
+    ```bash
+    # Lean redaction — zeros primitive arrays (byte[], char[], etc.):
+    cf java heap-dump $APP_NAME --redact
+
+    # Complete redaction — zeros all primitive arrays and individual primitive fields:
+    cf java heap-dump $APP_NAME --redact-complete
+
+    # Redact and compress:
+    cf java heap-dump $APP_NAME --redact --compress
+
+    # Redact and open in browser:
+    cf java heap-dump $APP_NAME --redact --open
+    ```
+    The unredacted dump is never written to disk — redaction happens in-memory during download.
+
+- title: Capture a safer heap dump for sharing or browser analysis
+  body: |
+    If you need to inspect a heap dump locally or share it with others, combine redaction,
+    compression, and browser opening as needed:
+    ```bash
+    # Redact sensitive values and keep the dump compressed:
+    cf java heap-dump $APP_NAME --redact --compress
+
+    # Redact and open immediately in hprof-analyzer:
+    cf java heap-dump $APP_NAME --redact --open
+
+    # Use complete redaction for maximum privacy:
+    cf java heap-dump $APP_NAME --redact-complete --compress
+    ```
+    Use `--redact-keep-on-error` only if you explicitly want to keep a partially written redacted
+    file when local redaction fails.
+
+- title: Open a heap dump in hprof-analyzer
+  body: |
+    After downloading, the plugin can spin up a temporary local server and open
+    [hprof-analyzer](https://parttimenerd.github.io/hprof-analyzer) in the browser automatically:
+    ```bash
+    cf java heap-dump $APP_NAME --open
+    ```
+    The server binds to `127.0.0.1` (loopback only), serves the file exactly once under a
+    random token URL, then shuts down automatically after the browser fetches it.
+
+    **macOS:** if the Application Firewall is enabled, click **Allow** when asked whether
+    `cf-cli-java-plugin` may accept incoming network connections.
+
+    **Browsers:** click **Allow** when the browser asks for permission to access local services.
+
+    To use a locally running hprof-analyzer instance instead of the hosted one:
+    ```bash
+    cf java heap-dump $APP_NAME --open-url http://localhost:8080
+    ```
+
 note: Requires cf ssh to be enabled on the app (`cf enable-ssh my-app`, then restart).
   The heap-dump command additionally needs jmap — see the How To entry above if it is missing.

@@ -48,7 +48,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go-version: [">=1.23.5"]
+        go-version: ["1.26.9"]
 
     steps:
       - name: Checkout code
@@ -63,8 +63,17 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          curl -fsSL -o dist/jstall-minimal.jar https://github.com/parttimenerd/jstall/releases/latest/download/jstall-minimal.jar
+          gh release download -R parttimenerd/jstall -p jstall-minimal.jar -D dist --clobber
           ls -lh dist/jstall-minimal.jar
+          expected=$(gh release view --repo parttimenerd/jstall --json tagName --jq '.tagName' | sed 's/^v//')
+          actual=$(java -jar dist/jstall-minimal.jar --version 2>&1 | head -1)
+          echo "Expected jstall version: $expected, JAR reports: $actual"
+          if [ "$actual" != "$expected" ]; then
+            echo "ERROR: jstall-minimal.jar reports version $actual but latest release is $expected" >&2
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies
         run: go mod tidy -e || true
@@ -181,8 +190,10 @@ jobs:
       - name: Get JStall version
         id: jstall
         run: |
-          JSTALL_VERSION=$(curl -s https://api.github.com/repos/parttimenerd/jstall/releases/latest | python3 -c "import sys,json; print(json.load(sys.stdin).get('tag_name','unknown'))")
+          JSTALL_VERSION=$(gh run list -R parttimenerd/jstall --branch main --limit 1 --json headSha,databaseId --jq '.[0] | "main@" + (.headSha[:8]) + " (run " + (.databaseId|tostring) + ")"')
           echo "version=$JSTALL_VERSION" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: thomashampson/delete-older-releases@2ff234dfe6ad2757ac7e53d96e298fbe82b0fd56 # @main
         with:
@@ -231,14 +242,13 @@ jobs:
             ```sh
             # on Mac arm64
             cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-macos-arm64
-            # on Windows x86
-            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-windows-amd64
-            # on Linux x86
+            # on Windows amd64
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-windows-amd64.exe
+            # on Linux amd64
             cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-linux-amd64
             ```
 
             **Note:** On Linux and macOS, if you get a permission error, run `chmod +x [cf-cli-java-plugin]` on the plugin binary.
-            On Windows, the plugin will refuse to install unless the binary has the `.exe` file extension.
 
             You can verify that the plugin is successfully installed by looking for `java` in the output of `cf plugins`.
             
