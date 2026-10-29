@@ -179,7 +179,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
         go-version: ["1.26.9"]
 
     steps:
@@ -270,6 +270,14 @@ jobs:
           set -euo pipefail
           GOOS=linux GOARCH=arm64 go build -o dist/cf-cli-java-plugin-linux-arm64 .
           test -s dist/cf-cli-java-plugin-linux-arm64
+
+      - name: Build macOS ARM64 binary
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o dist/cf-cli-java-plugin-macos-arm64 .
+          test -s dist/cf-cli-java-plugin-macos-arm64
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7

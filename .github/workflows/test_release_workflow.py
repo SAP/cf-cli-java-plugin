@@ -69,6 +69,14 @@ class ReleaseWorkflowTests(unittest.TestCase):
         )
         self.assertIn("dist/cf-cli-java-plugin-linux-arm64", combine)
 
+    def test_macos_arm64_is_cross_built_without_hosted_macos_runner(self):
+        build = self.workflow["jobs"]["build"]
+        self.assertNotIn("macos-latest", build["strategy"]["matrix"]["os"])
+        cross_build = next(step for step in build["steps"] if step.get("name") == "Build macOS ARM64 binary")
+        self.assertEqual(cross_build.get("if"), "matrix.os == 'ubuntu-latest'")
+        self.assertIn("GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build", cross_build["run"])
+        self.assertIn("dist/cf-cli-java-plugin-macos-arm64", cross_build["run"])
+
     def test_generated_release_notes_are_transferred_to_publisher(self):
         self.assertTrue(
             any("release_notes.md" in step.get("with", {}).get("path", "") for step in self.steps("prepare-release"))
