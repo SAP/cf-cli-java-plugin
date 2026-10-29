@@ -78,6 +78,23 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "release_notes.md",
         )
 
+    def test_jstall_tag_is_selected_once_and_shared_with_notes_and_builds(self):
+        prepare = self.steps("prepare-release")
+        self.assertIn("jstall", [step.get("id") for step in prepare])
+        selection = next(step for step in prepare if step.get("id") == "jstall")
+        self.assertIn("gh release view --repo parttimenerd/jstall", selection["run"])
+        self.assertEqual(
+            self.workflow["jobs"]["prepare-release"]["outputs"]["jstall_tag"], "${{ steps.jstall.outputs.tag }}"
+        )
+        notes = next(step for step in prepare if step.get("name") == "Prepare version and release notes")
+        self.assertEqual(notes["env"]["JSTALL_VERSION"], "${{ steps.jstall.outputs.tag }}")
+        download = next(
+            step for step in self.steps("build") if step.get("name") == "Download JStall minimal JAR for go:embed"
+        )
+        self.assertEqual(download["env"]["JSTALL_TAG"], "${{ needs.prepare-release.outputs.jstall_tag }}")
+        self.assertIn('gh release download "$JSTALL_TAG"', download["run"])
+        self.assertNotIn("gh release view", download["run"])
+
     def test_only_binary_artifacts_are_merged_into_dist(self):
         steps = self.steps("create-release")
         download = next(step for step in steps if step.get("name") == "Download all build artifacts")
@@ -155,6 +172,28 @@ class ReleaseWorkflowTests(unittest.TestCase):
             windows = next(binary for binary in entry["binaries"] if binary["platform"] == "win64")
             self.assertTrue(windows["url"].endswith("/cf-cli-java-plugin-windows-amd64.exe"))
             self.assertIn("/releases/tag/4.0.3", (folder / "plugin-repo-summary.txt").read_text(encoding="utf-8"))
+
+    def test_generator_links_to_repository_running_workflow(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            dist = folder / "dist"
+            dist.mkdir()
+            for name in (
+                "cf-cli-java-plugin-linux-amd64",
+                "cf-cli-java-plugin-macos-arm64",
+                "cf-cli-java-plugin-windows-amd64.exe",
+            ):
+                (dist / name).write_bytes(b"plugin")
+            result = subprocess.run(
+                [sys.executable, str(WORKFLOWS / "generate_plugin_repo.py"), "4.0.3"],
+                cwd=folder,
+                env={**os.environ, "GITHUB_REPOSITORY": "parttimenerd/cf-cli-java-plugin"},
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            entry = yaml.safe_load((folder / "plugin-repo-entry.yml").read_text(encoding="utf-8"))[0]
+            self.assertTrue(all("parttimenerd/cf-cli-java-plugin" in binary["url"] for binary in entry["binaries"]))
 
     def test_generator_rejects_missing_or_empty_required_binaries(self):
         with tempfile.TemporaryDirectory() as temp:

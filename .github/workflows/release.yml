@@ -26,6 +26,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       commit: ${{ steps.version.outputs.commit }}
+      jstall_tag: ${{ steps.jstall.outputs.tag }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v6
@@ -73,11 +74,26 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Release version: $VERSION"
 
+      - name: Select bundled JStall release
+        id: jstall
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=$(gh release view --repo parttimenerd/jstall --json tagName --jq '.tagName')
+          if [[ ! "$tag" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid JStall release tag: $tag" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Prepare version and release notes
         env:
           VERSION: ${{ steps.version.outputs.version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
+          JSTALL_VERSION: ${{ steps.jstall.outputs.tag }}
         shell: bash
         run: |
           set -euo pipefail
@@ -190,16 +206,17 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JSTALL_TAG: ${{ needs.prepare-release.outputs.jstall_tag }}
         run: |
           set -euo pipefail
           mkdir -p dist
-          gh release download \
+          gh release download "$JSTALL_TAG" \
             --repo parttimenerd/jstall \
             --pattern jstall-minimal.jar \
             --dir dist \
             --clobber
 
-          expected=$(gh release view --repo parttimenerd/jstall --json tagName --jq '.tagName' | sed 's/^v//')
+          expected="${JSTALL_TAG#v}"
           actual=$(java -jar dist/jstall-minimal.jar --version 2>&1 | head -1)
 
           echo "Expected JStall version: $expected"

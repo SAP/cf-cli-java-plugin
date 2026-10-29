@@ -86,6 +86,19 @@ class UpdateVersionTests(unittest.TestCase):
             "### Fixed\n\n- Previous fix\n",
         )
 
+    def test_release_notes_use_repository_running_workflow(self):
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--release-notes-only", "4.0.3"],
+            cwd=self.root,
+            env={**os.environ, "JSTALL_VERSION": "v-test", "GITHUB_REPOSITORY": "parttimenerd/cf-cli-java-plugin"},
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        notes = (self.root / "release_notes.md").read_text(encoding="utf-8")
+        self.assertIn("https://github.com/parttimenerd/cf-cli-java-plugin/releases/download/4.0.3/", notes)
+        self.assertIn("https://github.com/parttimenerd/cf-cli-java-plugin/releases/latest/download/", notes)
+
     def test_promoted_version_is_reused_on_rerun(self):
         self.assertEqual(self.run_script("4", "0", "4").returncode, 0)
         promoted = self.changelog_path.read_text(encoding="utf-8")

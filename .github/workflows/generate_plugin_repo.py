@@ -4,6 +4,7 @@ Generate plugin repository YAML file for CF CLI plugin repository.
 This script creates the YAML file in the required format for the CF CLI plugin repository.
 """
 
+import os
 import sys
 import yaml
 import hashlib
@@ -20,7 +21,7 @@ def calculate_sha1(file_path):
 
 def generate_plugin_repo_yaml(version: str):
     """Generate the plugin repository YAML file."""
-    repo_url = "https://github.com/SAP/cf-cli-java-plugin"
+    repo_url = "https://github.com/" + os.environ.get("GITHUB_REPOSITORY", "SAP/cf-cli-java-plugin")
     
     # CF Community repository platform IDs are linux64, osx and win64;
     # Linux arm64 is distributed as a manual-download GitHub Release asset.

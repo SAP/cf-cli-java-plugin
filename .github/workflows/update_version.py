@@ -136,8 +136,9 @@ def generate_release_notes(version, changelog_content):
             "(https://github.com/parttimenerd/jstall#usage)).\n"
         )
 
-    release_url = f"https://github.com/SAP/cf-cli-java-plugin/releases/download/{version}"
-    latest_url = "https://github.com/SAP/cf-cli-java-plugin/releases/latest/download"
+    repo_url = "https://github.com/" + os.environ.get("GITHUB_REPOSITORY", "SAP/cf-cli-java-plugin")
+    release_url = f"{repo_url}/releases/download/{version}"
+    latest_url = f"{repo_url}/releases/latest/download"
     release_notes = f"""## CF CLI Java Plugin {version}
 
 Plugin for profiling Java applications and getting heap and thread-dumps.
