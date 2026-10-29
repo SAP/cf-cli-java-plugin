@@ -253,6 +253,7 @@ jobs:
           version: v2.15.0
 
       - name: Run Go quality checks
+        if: matrix.os != 'windows-latest'
         shell: bash
         run: ./scripts/lint-go.sh ci
 

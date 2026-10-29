@@ -32,9 +32,16 @@ class ReleaseWorkflowTests(unittest.TestCase):
             next(step["with"]["path"] for step in steps if step.get("uses", "").startswith("actions/upload-artifact")),
         )
 
-    def test_go_shell_lint_uses_bash_on_windows(self):
+    def test_go_shell_lint_uses_bash(self):
         step = next(step for step in self.steps("build") if "./scripts/lint-go.sh" in step.get("run", ""))
         self.assertEqual(step.get("shell"), "bash")
+
+    def test_go_format_check_skips_windows_crlf_checkout(self):
+        steps = self.steps("build")
+        quality = next(step for step in steps if "./scripts/lint-go.sh" in step.get("run", ""))
+        self.assertEqual(quality.get("if"), "matrix.os != 'windows-latest'")
+        self.assertTrue(any(step.get("run") == "go test ./..." for step in steps))
+        self.assertTrue(any(step.get("run") == "python3 .github/workflows/build.py" for step in steps))
 
     def test_ci_go_lint_never_rewrites_tagged_source(self):
         with tempfile.TemporaryDirectory() as temp:
