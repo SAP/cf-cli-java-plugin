@@ -10,12 +10,21 @@ permissions:
 jobs:
   generate-plugin-repo:
     name: Generate Plugin Repository YAML
+    # The main release workflow normally uploads these assets itself.
+    if: ${{ !contains(github.event.release.assets.*.name, 'plugin-repo-entry.yml') || !contains(github.event.release.assets.*.name, 'plugin-repo-summary.txt') }}
     runs-on: ubuntu-latest
     environment: release
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - name: Checkout release tooling
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: release-tools
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -30,21 +39,23 @@ jobs:
       - name: Download release assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
         run: |
           mkdir -p dist
           # Download all release assets
-          gh release download ${{ github.event.release.tag_name }} -D dist/
+          gh release download "$TAG" -D dist/
 
       - name: Generate plugin repository YAML
         env:
-          GITHUB_REF_NAME: ${{ github.event.release.tag_name }}
-        run: python3 .github/workflows/generate_plugin_repo.py $GITHUB_REF_NAME
+          TAG: ${{ github.event.release.tag_name }}
+        run: python3 release-tools/.github/workflows/generate_plugin_repo.py "$TAG"
 
       - name: Upload plugin repository files to release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
         run: |
-          gh release upload ${{ github.event.release.tag_name }} plugin-repo-entry.yml plugin-repo-summary.txt
+          gh release upload "$TAG" plugin-repo-entry.yml plugin-repo-summary.txt --clobber
 
       - name: Create PR to plugin repository (optional)
         env:

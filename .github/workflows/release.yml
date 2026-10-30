@@ -1,34 +1,198 @@
-name: Manual Release
+name: Release
 
 on:
-  workflow_dispatch: # Allows manual triggering
+  workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g., 3.0.4), you must have a changelog ready for this version (e.g. 3.0.4-snapshot-20231001)'
+        description: "Release version, e.g. 4.1.0 or 4.1.0-rc1"
         required: true
         type: string
+  push:
+    tags:
+      - "[0-9]*.[0-9]*.[0-9]*"
 
 permissions:
   contents: write
   actions: read
 
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
 jobs:
-  release:
-    name: Create Proper Release on All Platforms
+  prepare-release:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      commit: ${{ steps.version.outputs.commit }}
+      jstall_tag: ${{ steps.jstall.outputs.tag }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout release tooling
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.repository.default_branch }}
+          path: release-tools
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip requests PyYAML
+
+      - name: Run release-script regression tests
+        run: python -m unittest discover -s release-tools/.github/workflows -p 'test_*.py' -v
+
+      - name: Determine release version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]*)?$ ]]; then
+            echo "Invalid release version: $VERSION" >&2
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Release version: $VERSION"
+
+      - name: Select bundled JStall release
+        id: jstall
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=$(gh release view --repo parttimenerd/jstall --json tagName --jq '.tagName')
+          if [[ ! "$tag" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid JStall release tag: $tag" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare version and release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          JSTALL_VERSION: ${{ steps.jstall.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # GitHub's release-by-tag endpoint does not find draft releases.
+          release_draft=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$VERSION\") | .draft")
+          if [[ -n "$release_draft" && "$release_draft" != "true" ]]; then
+            echo "Published or ambiguous release $VERSION already exists" >&2
+            exit 1
+          fi
+          if [[ "$release_draft" == "true" ]]; then
+            echo "Retrying incomplete draft release $VERSION"
+          fi
+
+          # A previously tagged version must be built from its immutable tag.
+          # Keep the current script available if the tagged commit predates it.
+          cp release-tools/.github/workflows/update_version.py "$RUNNER_TEMP/update_version.py"
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            if git show-ref --verify --quiet "refs/tags/$VERSION"; then
+              git checkout --detach "$VERSION"
+              python "$RUNNER_TEMP/update_version.py" --release-notes-only "$VERSION"
+            else
+              # Do not push a commit for a version already tagged upstream.
+              remote_tag=$(git ls-remote --tags origin "refs/tags/$VERSION")
+              if [[ -n "$remote_tag" ]]; then
+                echo "Tag $VERSION already exists on origin; fetch tags and retry" >&2
+                exit 1
+              fi
+
+              if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+                python "$RUNNER_TEMP/update_version.py" \
+                  "${BASH_REMATCH[1]}" \
+                  "${BASH_REMATCH[2]}" \
+                  "${BASH_REMATCH[3]}"
+              else
+                # RC releases use the existing base-version changelog.
+                python "$RUNNER_TEMP/update_version.py" "$VERSION" 0 0
+              fi
+
+              git config user.name "GitHub Actions"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+              # release_changelog.txt and release_notes.md are build artifacts
+              # and must not be committed to the repository.
+              git add cf_cli_java_plugin.go CHANGELOG.md
+              if ! git diff --cached --quiet; then
+                git commit -m "Set version to v$VERSION"
+                git push origin "HEAD:${GITHUB_REF_NAME}"
+              fi
+
+              git tag "$VERSION"
+              git push origin "$VERSION"
+            fi
+          else
+            # A tag-triggered run must not mutate or push the tagged source.
+            python "$RUNNER_TEMP/update_version.py" --release-notes-only "$VERSION"
+          fi
+
+          echo "Prepared release $VERSION"
+
+      - name: Export prepared commit
+        id: commit
+        run: |
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set commit output
+        run: |
+          echo "Prepared commit: ${{ steps.commit.outputs.commit }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: release_notes.md
+          if-no-files-found: error
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: prepare-release
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
         go-version: ["1.26.9"]
 
     steps:
-      - name: Checkout code
+      - name: Checkout prepared source
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare-release.outputs.commit }}
 
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go-version }}
+          cache: true
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -36,60 +200,111 @@ jobs:
           python-version: "3.x"
 
       - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install PyYAML
+        run: python -m pip install --upgrade pip PyYAML
 
       - name: Download JStall minimal JAR for go:embed
         shell: bash
-        run: |
-          mkdir -p dist
-          gh release download -R parttimenerd/jstall -p jstall-minimal.jar -D dist --clobber
-          expected=$(gh release view --repo parttimenerd/jstall --json tagName --jq '.tagName' | sed 's/^v//')
-          actual=$(java -jar dist/jstall-minimal.jar --version 2>&1 | head -1)
-          echo "Expected jstall version: $expected, JAR reports: $actual"
-          if [ "$actual" != "$expected" ]; then
-            echo "ERROR: jstall-minimal.jar reports version $actual but latest release is $expected" >&2
-            exit 1
-          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JSTALL_TAG: ${{ needs.prepare-release.outputs.jstall_tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "$JSTALL_TAG" \
+            --repo parttimenerd/jstall \
+            --pattern jstall-minimal.jar \
+            --dir dist \
+            --clobber
 
-      - name: Install dependencies
-        run: go mod tidy -e || true
+          expected="${JSTALL_TAG#v}"
+          actual=$(java -jar dist/jstall-minimal.jar --version 2>&1 | head -1)
+
+          echo "Expected JStall version: $expected"
+          echo "JAR reports: $actual"
+
+          if [[ "$actual" != "$expected" ]]; then
+            echo "JStall version mismatch" >&2
+            exit 1
+          fi
+
+      - name: Download hprof-redact binaries for go:embed
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/workflows/build.py --deps-only
+          for file in \
+            dist/hprof-redact-linux-amd64 \
+            dist/hprof-redact-linux-arm64 \
+            dist/hprof-redact-darwin-arm64 \
+            dist/hprof-redact-windows-amd64.exe
+          do
+            if [[ ! -s "$file" ]]; then
+              echo "Required embedded binary missing or empty: $file" >&2
+              exit 1
+            fi
+          done
+
+      - name: Download Go dependencies
+        run: go mod download
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: v2.15.0
 
-      - name: Lint Go files
+      - name: Run Go quality checks
+        if: matrix.os != 'windows-latest'
+        shell: bash
         run: ./scripts/lint-go.sh ci
 
-      - name: Run tests
-        run: ./scripts/lint-go.sh ci
+      - name: Run Go tests
+        run: go test ./...
 
-      - name: Build binary
+      - name: Build binaries
         run: python3 .github/workflows/build.py
+
+      - name: Build Linux ARM64 binary
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOOS=linux GOARCH=arm64 go build -o dist/cf-cli-java-plugin-linux-arm64 .
+          test -s dist/cf-cli-java-plugin-linux-arm64
+
+      - name: Build macOS ARM64 binary
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o dist/cf-cli-java-plugin-macos-arm64 .
+          test -s dist/cf-cli-java-plugin-macos-arm64
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
           name: binaries-${{ matrix.os }}
-          path: dist/
+          path: dist/cf-cli-java-plugin-*
+          if-no-files-found: error
 
   create-release:
-    name: Create GitHub Release with Plugin Repository Entry
-    needs: release
+    name: Publish GitHub Release
+    needs: [prepare-release, build]
     runs-on: ubuntu-latest
     environment: release
-    
+
     steps:
-      - name: Checkout code
+      - name: Checkout prepared source
         uses: actions/checkout@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ needs.prepare-release.outputs.commit }}
           fetch-depth: 0
+
+      - name: Checkout release tooling
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.repository.default_branch }}
+          path: release-tools
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -97,84 +312,55 @@ jobs:
           python-version: "3.x"
 
       - name: Install Python dependencies
-        run: |
-          python3 -m venv venv
-          source venv/bin/activate
-          python3 -m pip install --upgrade pip
-          pip install PyYAML requests
+        run: python -m pip install --upgrade pip PyYAML requests
 
-      - name: Parse version and update Go source
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Parse version input (e.g., "4.1.0" -> major=4, minor=1, build=0)
-          VERSION="${{ github.event.inputs.version }}"
-          IFS='.' read -r MAJOR MINOR BUILD <<< "$VERSION"
-          
-          # Determine the bundled JStall version
-          export JSTALL_VERSION=$(gh run list -R parttimenerd/jstall --branch main --limit 1 --json headSha,databaseId --jq '.[0] | "main@" + (.headSha[:8]) + " (run " + (.databaseId|tostring) + ")"')
-          echo "Bundled JStall version: $JSTALL_VERSION"
-
-          echo "Updating version to $MAJOR.$MINOR.$BUILD"
-          source venv/bin/activate
-          python3 .github/workflows/update_version.py "$MAJOR" "$MINOR" "$BUILD"
-          
-          # Configure git
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          
-          # Check if there are changes
-          if git diff --quiet; then
-            echo "No version changes detected"
-          else
-            echo "Committing version update"
-            git add cf_cli_java_plugin.go CHANGELOG.md
-            git commit -m "Set version to v$VERSION"
-            git push
-          fi
-
-      - name: Create and push tag
-        run: |
-          VERSION="${{ github.event.inputs.version }}"
-          echo "Creating tag $VERSION"
-          git tag "$VERSION"
-          git push origin "$VERSION"
+      - name: Download release notes
+        uses: actions/download-artifact@v8
+        with:
+          name: release-notes
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v8
         with:
-          path: artifacts/
+          pattern: binaries-*
+          path: dist/
+          merge-multiple: true
 
-      - name: Combine all artifacts
+      - name: Verify build artifacts
+        shell: bash
         run: |
-          mkdir -p dist
-          find artifacts/ -type f -exec cp {} dist/ \;
+          set -euo pipefail
           ls -la dist/
+          for file in \
+            dist/cf-cli-java-plugin-linux-amd64 \
+            dist/cf-cli-java-plugin-linux-arm64 \
+            dist/cf-cli-java-plugin-macos-arm64 \
+            dist/cf-cli-java-plugin-windows-amd64.exe
+          do
+            if [[ ! -s "$file" ]]; then
+              echo "Required plugin binary missing: $file" >&2
+              exit 1
+            fi
+          done
 
       - name: Generate plugin repository YAML
         env:
-          GITHUB_REF_NAME: ${{ github.event.inputs.version }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
         run: |
-          source venv/bin/activate
-          echo "📝 Generating plugin repository YAML file for version ${{ github.event.inputs.version }}..."
-          python3 .github/workflows/generate_plugin_repo.py "${{ github.event.inputs.version }}"
-          echo "✅ Plugin repository YAML generated"
-          echo ""
-          echo "Generated files:"
+          python3 release-tools/.github/workflows/generate_plugin_repo.py "$VERSION"
           ls -la plugin-repo-*
-          echo ""
-          echo "Plugin repository entry preview:"
-          head -20 plugin-repo-entry.yml
 
-      - name: Generate timestamp
+      - name: Create timestamp
         id: timestamp
-        run: echo "timestamp=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+        run: echo "timestamp=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844
         with:
-          tag_name: ${{ github.event.inputs.version }}
-          name: ${{ github.event.inputs.version }}
+          tag_name: ${{ needs.prepare-release.outputs.version }}
+          name: ${{ needs.prepare-release.outputs.version }}
+          prerelease: ${{ contains(needs.prepare-release.outputs.version, '-rc') }}
+          draft: true
           files: |
             dist/*
             plugin-repo-entry.yml
@@ -183,16 +369,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create Summary Comment
+      - name: Publish complete release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: gh release edit "$VERSION" --draft=false
+
+      - name: Create summary
+        env:
+          VERSION: ${{ needs.prepare-release.outputs.version }}
         run: |
-          echo "## 🚀 Release ${{ github.event.inputs.version }} Created Successfully!" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Files Generated:" >> $GITHUB_STEP_SUMMARY
-          echo "- Release binaries for all platforms" >> $GITHUB_STEP_SUMMARY
-          echo "- \`plugin-repo-entry.yml\` - CF CLI plugin repository entry" >> $GITHUB_STEP_SUMMARY
-          echo "- \`plugin-repo-summary.txt\` - Human-readable summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
-          echo "1. Download \`plugin-repo-entry.yml\` from the release" >> $GITHUB_STEP_SUMMARY
-          echo "2. Submit to CF CLI plugin repository" >> $GITHUB_STEP_SUMMARY
-          echo "3. Update documentation if needed" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Release $VERSION created successfully"
+            echo
+            echo "### Published files"
+            echo "- Platform binaries"
+            echo "- plugin-repo-entry.yml"
+            echo "- plugin-repo-summary.txt"
+          } >> "$GITHUB_STEP_SUMMARY"
