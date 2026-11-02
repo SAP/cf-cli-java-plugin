@@ -676,6 +676,35 @@ Centralized linting scripts:
 - Automated linting and testing on PRs
 - Pre-commit hooks with auto-formatting
 
+### Creating a Release (Maintainers)
+
+1. **Prepare:** Merge the changes to the default branch. For a new final version, add a nonempty entry under
+   `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md), or create a nonempty `## [VERSION]` section. For an RC,
+   the base version's section must already exist.
+2. **Run:** In GitHub Actions, open **Release**, select the default branch, and choose **Run workflow**. Enter
+   `4.0.4` or `4.0.4-rc1`, for example (no `v` prefix). The workflow may require approval for the `release`
+   environment. For a new final version, it updates and commits the Go version and changelog, then pushes the tag.
+   Generated release notes become the GitHub Release body; they are not committed. RCs leave the Go version and
+   changelog unchanged and are marked as prereleases.
+3. **Verify:** Wait for all jobs to succeed. Check the published release for Linux AMD64/ARM64, macOS ARM64, and
+   Windows AMD64 (`.exe`) binaries, release notes, and the plugin-repository entry and summary. Assets are uploaded
+   to a draft before publication. Submit the generated repository entry to the CF Community plugin repository
+   separately; this workflow does not submit it.
+
+**Retrying:** If the tag exists but the release is missing (for example, `4.0.3`) or remains a draft after a failed
+upload, rerun **Release** manually with the same version. It builds the tagged commit without moving the tag or
+changing source files. An existing tag needs a nonempty version section in [CHANGELOG.md](CHANGELOG.md); an empty
+`## [Unreleased]` is fine. Already published releases cannot be rerun. Never force-push a release tag.
+
+Linux ARM64 is available as a direct release download, but the CF Community repository index has no Linux ARM64
+platform identifier; the generated entry covers `linux64`, `osx`, and `win64` only.
+
+To check the release scripts locally (without a CF environment), install Python and PyYAML, then run:
+
+```bash
+python3 -m unittest discover -s .github/workflows -p 'test_*.py' -v
+```
+
 ## Support, Feedback, Contributing
 
 This project is open to feature requests/suggestions, bug reports etc. via
