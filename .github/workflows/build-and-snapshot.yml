@@ -67,6 +67,7 @@ jobs:
       - name: Download JStall minimal JAR for go:embed
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p dist
           gh release download -R parttimenerd/jstall -p jstall-minimal.jar -D dist --clobber
           ls -lh dist/jstall-minimal.jar
@@ -85,7 +86,7 @@ jobs:
         run: python3 .github/workflows/build.py --deps-only
 
       - name: Install dependencies
-        run: go mod tidy -e || true
+        run: go mod download
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
@@ -275,6 +276,8 @@ jobs:
             cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-windows-amd64.exe
             # on Linux amd64
             cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-linux-amd64
+            # on Linux arm64
+            cf install-plugin https://github.com/SAP/cf-cli-java-plugin/releases/download/snapshot/cf-cli-java-plugin-linux-arm64
             ```
 
             **Note:** On Linux and macOS, if you get a permission error, run `chmod +x [cf-cli-java-plugin]` on the plugin binary.
