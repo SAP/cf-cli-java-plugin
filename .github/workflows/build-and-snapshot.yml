@@ -75,6 +75,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Download hprof-redact binaries for go:embed
+        shell: bash
+        run: python3 .github/workflows/build.py --deps-only
+
       - name: Install dependencies
         run: go mod tidy -e || true
 
